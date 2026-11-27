@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UserLevelSchema } from '#/types';
+import { SeatPlanSchema, UserLevelSchema } from '#/types';
 
 /**
  * Wire schemas for offerings — a dated run of a course.
@@ -40,6 +40,8 @@ export const offeringUserSchema = z.object({
    * table says so rather than guessing a default.
    */
   level: UserLevelSchema.nullable(),
+  /** Their seat on THIS offering: paid, or free (a 15 s video preview). */
+  plan: SeatPlanSchema,
 });
 export type OfferingUser = z.infer<typeof offeringUserSchema>;
 
@@ -92,6 +94,8 @@ export const createOfferingInputSchema = z
      * an empty array, not a validation failure.
      */
     userIds: z.array(z.string()).default([]),
+    /** Which of `userIds` sit on a free seat; everyone else is paid. */
+    freeUserIds: z.array(z.string()).default([]),
   })
   .superRefine(datesOrdered);
 export type CreateOfferingInput = z.infer<typeof createOfferingInputSchema>;
@@ -107,6 +111,12 @@ export const updateOfferingInputSchema = z
      */
     arriveAt: calendarDaySchema.nullable().optional(),
     userIds: z.array(z.string()),
+    /**
+     * Which of `userIds` sit on a free seat. Absent keeps every remaining
+     * seat's plan: a tab open since before plans existed sends none, and must
+     * not turn free seats back to paid.
+     */
+    freeUserIds: z.array(z.string()).optional(),
   })
   .superRefine(datesOrdered);
 export type UpdateOfferingInput = z.infer<typeof updateOfferingInputSchema>;

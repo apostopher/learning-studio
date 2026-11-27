@@ -1,6 +1,7 @@
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
+import { seatPlanForCourse } from '#/db/course-roster-access';
 import { getLessonInCourse, isSubscribedToCourse } from '#/db/lesson-access';
 import { getCurrentLevel } from '#/db/user-levels';
 import {
@@ -15,6 +16,7 @@ import {
   isLessonArchivable,
   isLessonOpenAtLevel,
 } from '#/lib/level-visibility';
+import { videoPreviewSeconds } from '#/lib/video-preview';
 import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 import type { UserLevel } from '#/types';
 
@@ -47,6 +49,12 @@ export type LessonGateResult = {
   outOfTier: null | { readOnly: boolean };
   lessonLock: LessonLock;
   materialLock: MaterialLock;
+  /**
+   * Seconds of this lesson's video the learner may play, or null for all of
+   * it: a paid lesson on a free seat plays only its opening
+   * (`videoPreviewSeconds`). Never set for an author.
+   */
+  videoPreviewSeconds: number | null;
 };
 
 /**
@@ -143,15 +151,17 @@ export async function evaluateLessonGate({
       outOfTier: null,
       lessonLock: { kind: 'open' },
       materialLock: { kind: 'open' },
+      videoPreviewSeconds: null,
     };
   }
 
   // Concurrent, not sequential: one of this function's nine callers is the
   // video-progress beacon, which fires repeatedly through a playing lesson,
   // and these two queries share no data.
-  const [subscribed, level] = await Promise.all([
+  const [subscribed, level, plan] = await Promise.all([
     isSubscribedToCourse(userId, course.courseId),
     getCurrentLevel(userId, course.courseId),
+    seatPlanForCourse(userId, course.courseId),
   ]);
 
   // Fail closed on the REQUESTED lesson, against the unfiltered payload.
@@ -202,12 +212,14 @@ export async function evaluateLessonGate({
       outOfTier: { readOnly: completed },
       lessonLock: { kind: 'open' },
       materialLock: { kind: 'open' },
+      videoPreviewSeconds: videoPreviewSeconds(target, plan),
     };
   }
 
   // Filter first, then gate — so a lesson the pilot cannot see can never be
   // named as the prerequisite blocking one they can.
   const gateCourse = toGateCourse(filterCourseToLevel(details, level));
+  const preview = videoPreviewSeconds(target, plan);
   // Deliberately the UNFILTERED payload: a hidden lesson the pilot completed
   // at an earlier tier still counts as done, so a visible lesson that
   // explicitly depends on it does not lock on work already done.
@@ -220,6 +232,13 @@ export async function evaluateLessonGate({
     level,
     outOfTier: null,
     lessonLock: evaluateLessonLock(gateCourse, lessonSlug, learnerProgress),
-    materialLock: evaluateMaterialLock(gateCourse, lessonSlug, learnerProgress),
+    // A preview can never be watched to the end, so a "watch the video
+    // first" lock would hold the brief, quiz and debrief shut for good. Only
+    // the video is capped on a free seat (user, 2026-11-28).
+    materialLock:
+      preview === null
+        ? evaluateMaterialLock(gateCourse, lessonSlug, learnerProgress)
+        : { kind: 'open' },
+    videoPreviewSeconds: preview,
   };
 }

@@ -28,6 +28,13 @@ vi.mock('#/db/course-progress', () => ({
 // backed) module would otherwise open a database connection here.
 vi.mock('#/db/course-staff', () => ({ isCourseStaff: m.isCourseStaff }));
 vi.mock('#/db/user-levels', () => ({ getCurrentLevel: m.getCurrentLevel }));
+// Every seat paid: no lesson here is capped to a preview. Not on a roster:
+// an admin here reads as the course's author.
+vi.mock('#/db/course-roster-access', () => ({
+  seatPlanForCourse: async () => 'paid',
+  isOnCourseRoster: async () => false,
+  isOnCourseRosterBySlug: async () => false,
+}));
 
 import { evaluateLessonGate } from '#/lib/lesson-gating.server';
 

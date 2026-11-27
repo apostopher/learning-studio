@@ -82,3 +82,24 @@ describe('playbackToState', () => {
     expect(state.languages).toEqual(['en']);
   });
 });
+
+describe('playbackToState preview', () => {
+  it('hands the player the cap the server sent, parsed from the wire', async () => {
+    const { learnerPlaybackSchema } = await import('#/lib/admin-schemas');
+    const wire = learnerPlaybackSchema.parse({
+      ...ready,
+      lang: 'en',
+      languages: ['en'],
+      preview: { seconds: 15, fullDurationSeconds: 853.5 },
+    });
+    const state = playbackToState(wire, vi.fn());
+    if (state.status !== 'ready') throw new Error('expected ready');
+    expect(state.preview).toEqual({ seconds: 15, fullDurationSeconds: 853.5 });
+  });
+
+  it('has no preview for a full playback', () => {
+    const state = playbackToState(ready, vi.fn());
+    if (state.status !== 'ready') throw new Error('expected ready');
+    expect(state).not.toHaveProperty('preview');
+  });
+});

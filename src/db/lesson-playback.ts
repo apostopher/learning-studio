@@ -17,6 +17,7 @@ import {
   VIDEO_LANGUAGES,
   type VideoLang,
 } from '#/lib/video-languages';
+import { VIDEO_PREVIEW_SECONDS } from '#/lib/video-preview';
 import { playbackCacheTtl } from '#/lib/video-providers/mux-captions';
 import type { ProviderId } from '#/lib/video-providers/types';
 
@@ -43,6 +44,7 @@ async function resolveLessonPlaybackUncached(
   snapshot: PinnedSnapshot,
   courseId: number,
   lang: VideoLang,
+  previewSeconds: number | undefined,
 ): Promise<LessonPlaybackResult | null> {
   if (!snapshot.videoProvider || !snapshot.videoRef) return null;
 
@@ -53,6 +55,7 @@ async function resolveLessonPlaybackUncached(
     otherVideoIds: snapshot.otherVideoIds,
     courseId,
     lang,
+    previewSeconds,
   });
 }
 
@@ -108,6 +111,11 @@ type LessonPlaybackOptions = {
   skipCache?: boolean;
   /** The learner's requested language; `en` when absent. */
   lang?: VideoLang;
+  /**
+   * Play only the first this-many seconds: a free seat on a paid lesson.
+   * Cached apart from the full playback, which must never answer it.
+   */
+  previewSeconds?: number | null;
 };
 
 type LessonPlaybackReader = ((
@@ -130,7 +138,11 @@ const cacheKey = (
   lessonSlug: string,
   versionId: number,
   lang: VideoLang,
-) => `${CACHE_KEY_PREFIX}:${courseId}:${lessonSlug}:${versionId}:${lang}`;
+  previewSeconds?: number,
+) =>
+  `${CACHE_KEY_PREFIX}:${courseId}:${lessonSlug}:${versionId}:${lang}${
+    previewSeconds === undefined ? '' : `:preview${previewSeconds}`
+  }`;
 
 export const getLessonPlayback: LessonPlaybackReader = Object.assign(
   async (
@@ -138,9 +150,16 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
     options: LessonPlaybackOptions,
   ): Promise<LessonPlaybackResult | null> => {
     const lang = options.lang ?? PRIMARY_VIDEO_LANG;
+    const previewSeconds = options.previewSeconds ?? undefined;
     const snapshot = await getPinnedSnapshot(lessonSlug, options.courseId);
     if (!snapshot) return null;
-    const key = cacheKey(options.courseId, lessonSlug, snapshot.id, lang);
+    const key = cacheKey(
+      options.courseId,
+      lessonSlug,
+      snapshot.id,
+      lang,
+      previewSeconds,
+    );
 
     if (!options.skipCache) {
       const cached = await redis.get<LessonPlaybackResult>(key);
@@ -151,6 +170,7 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
       snapshot,
       options.courseId,
       lang,
+      previewSeconds,
     );
 
     if (result?.status === 'ready' && result.expiresInSeconds !== null) {
@@ -186,9 +206,16 @@ export const getLessonPlayback: LessonPlaybackReader = Object.assign(
       // version has no video in.
       const keys = courseIds.flatMap((courseId) =>
         versions.flatMap((version) =>
-          ALL_LANGS.map((lang) =>
+          ALL_LANGS.flatMap((lang) => [
             cacheKey(courseId, lessonSlug, version.id, lang),
-          ),
+            cacheKey(
+              courseId,
+              lessonSlug,
+              version.id,
+              lang,
+              VIDEO_PREVIEW_SECONDS,
+            ),
+          ]),
         ),
       );
       // One request, not one per key; DEL with no key is an error.

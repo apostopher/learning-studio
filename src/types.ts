@@ -8,6 +8,14 @@ export const SubscriptionsSchema = z.array(SubscriptionSchema);
 export type SubscriptionType = z.infer<typeof SubscriptionSchema>;
 
 /**
+ * A seat on an offering: paid, or free. A free seat plays only the first
+ * `PREVIEW_SECONDS` of a paid lesson's video (user, 2026-11-28). Every seat
+ * is paid unless someone taps it to free on the schedule roster.
+ */
+export const SeatPlanSchema = z.enum(['paid', 'free']);
+export type SeatPlan = z.infer<typeof SeatPlanSchema>;
+
+/**
  * A pilot's competence tier within one course. Ordered — index is the rung.
  *
  * Stored as `text` rather than a pg enum, matching `required_subscriptions`:

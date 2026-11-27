@@ -57,6 +57,11 @@ export async function saveVideoPositionHandler(
   if (gate.outOfTier && !gate.outOfTier.readOnly) {
     return new Response('Forbidden', { status: 403 });
   }
+  // A preview's playhead is inside the clip; saved, it would resume the full
+  // video, once paid, at a meaningless point, or mark the clip's end finished.
+  if (gate.videoPreviewSeconds !== null) {
+    return new Response('Forbidden', { status: 403 });
+  }
 
   const lessonId = await getLessonIdBySlug(lessonSlug);
   if (lessonId === null) {

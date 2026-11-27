@@ -318,6 +318,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     name: 'Ada Lovelace',
     email: 'ada@example.com',
     level: 'intermediate' as const,
+    plan: 'paid' as const,
   };
   const withAda: Offering = { ...offeringA, users: [ada] };
   const adaInDirectory = {
@@ -880,6 +881,7 @@ describe('OfferingPopoverContainer Print', () => {
             name: 'David Cooke',
             email: 'david@example.com',
             level: 'basic',
+            plan: 'paid' as const,
           },
         ],
       },
@@ -899,5 +901,68 @@ describe('OfferingPopoverContainer Print', () => {
     expect(text).toContain('David Cooke');
     expect(text).toContain('david@example.com');
     expect(text).toContain('Basic');
+  });
+});
+
+/**
+ * The PLAN chip is part of the roster: a press flips it on screen and the
+ * seat's plan reaches the server on Save. Asserted on the update mutation,
+ * which is where a plan computed and never sent would be caught.
+ */
+describe('OfferingPopoverContainer seat plans', () => {
+  const seat = (userId: string, name: string, plan: 'paid' | 'free') => ({
+    userId,
+    name,
+    email: `${userId}@example.com`,
+    level: null,
+    plan,
+  });
+  const withSeats: Offering = {
+    ...offeringA,
+    users: [
+      seat('u-ada', 'Ada Lovelace', 'paid'),
+      seat('u-bob', 'Bob Hoover', 'free'),
+    ],
+  };
+  const planChip = (name: string) =>
+    screen.getByRole('button', { name: new RegExp(`^Plan for ${name}`) });
+
+  beforeEach(() => {
+    updateMutate.mockReset();
+    directory.users = [];
+  });
+
+  it('flips a seat on a press, and saves the free seats with the roster', async () => {
+    const { pinA } = renderPopover([withSeats]);
+    pinA();
+
+    fireEvent.click(planChip('Ada Lovelace'));
+    expect(planChip('Ada Lovelace').textContent).toBe('Free');
+    // Nothing is written until Save, like adding or removing someone.
+    expect(updateMutate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+
+    expect(updateMutate).toHaveBeenCalledTimes(1);
+    expect(updateMutate.mock.calls[0][0]).toMatchObject({
+      offeringId: 7,
+      userIds: ['u-ada', 'u-bob'],
+      freeUserIds: ['u-ada', 'u-bob'],
+    });
+  });
+
+  it('flips a free seat back to paid', async () => {
+    const { pinA } = renderPopover([withSeats]);
+    pinA();
+
+    fireEvent.click(planChip('Bob Hoover'));
+    expect(planChip('Bob Hoover').textContent).toBe('Paid');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+    expect(updateMutate.mock.calls[0][0]).toMatchObject({ freeUserIds: [] });
   });
 });

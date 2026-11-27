@@ -58,6 +58,7 @@ const inTier = {
   outOfTier: null,
   lessonLock: { kind: 'open' },
   materialLock: { kind: 'open' },
+  videoPreviewSeconds: null,
 };
 
 beforeEach(() => {

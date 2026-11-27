@@ -271,6 +271,8 @@ export const OfferingPopoverContainer = ({
           .join(' ') || user.email,
       email: user.email,
       level: courseId === null ? null : (user.levels[courseId] ?? null),
+      // A new seat is paid: adding someone never cuts their videos short.
+      plan: 'paid' as const,
     }))
     .filter(
       (person) =>
@@ -288,6 +290,19 @@ export const OfferingPopoverContainer = ({
     form.setValue('users', [...users, person], { shouldDirty: true });
     setSelectedPerson(null);
     setPersonQuery('');
+  };
+
+  // Part of the roster, so saved with it on Save, like adding or removing.
+  const handleTogglePlan = (userId: string) => {
+    form.setValue(
+      'users',
+      users.map((person) =>
+        person.userId === userId
+          ? { ...person, plan: person.plan === 'paid' ? 'free' : 'paid' }
+          : person,
+      ),
+      { shouldDirty: true },
+    );
   };
 
   const handleRemove = (userId: string) => {
@@ -537,6 +552,9 @@ export const OfferingPopoverContainer = ({
       return;
     }
     const userIds = values.users.map((person) => person.userId);
+    const freeUserIds = values.users
+      .filter((person) => person.plan === 'free')
+      .map((person) => person.userId);
     if (saveTarget.mode === 'create') {
       create.mutate(
         {
@@ -545,6 +563,7 @@ export const OfferingPopoverContainer = ({
           endsOn: values.endsOn,
           arriveAt: values.arriveAt || null,
           userIds,
+          freeUserIds,
         },
         {
           onSuccess: (offering) => {
@@ -563,6 +582,7 @@ export const OfferingPopoverContainer = ({
         endsOn: values.endsOn,
         arriveAt: values.arriveAt || null,
         userIds,
+        freeUserIds,
       },
       {
         onSuccess: () => {
@@ -765,6 +785,7 @@ export const OfferingPopoverContainer = ({
                     <OfferingRosterTable
                       users={field.value}
                       onRemove={handleRemove}
+                      onTogglePlan={handleTogglePlan}
                       disabled={isSaving}
                       canEditLevels={canEditLevels}
                       levelLockReason={levelLockReason}

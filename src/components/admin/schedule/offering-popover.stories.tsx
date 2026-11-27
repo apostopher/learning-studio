@@ -24,30 +24,35 @@ const ROSTER: OfferingUser[] = [
     name: 'A. Lindholm',
     email: 'a.lindholm@example.com',
     level: 'basic',
+    plan: 'paid' as const,
   },
   {
     userId: 'u2',
     name: 'R. Ferreira',
     email: 'r.ferreira@example.com',
     level: 'intermediate',
+    plan: 'paid' as const,
   },
   {
     userId: 'u3',
     name: 'T. Okafor',
     email: 't.okafor@example.com',
     level: 'advanced',
+    plan: 'paid' as const,
   },
   {
     userId: 'u4',
     name: 'J. Vasseur',
     email: 'j.vasseur@example.com',
     level: null,
+    plan: 'paid' as const,
   },
   {
     userId: 'u5',
     name: 'M. Sandvik',
     email: 'm.sandvik@example.com',
     level: 'basic',
+    plan: 'paid' as const,
   },
 ];
 
@@ -57,18 +62,21 @@ const DIRECTORY: OfferingUser[] = [
     name: 'D. Ramirez',
     email: 'd.ramirez@example.com',
     level: 'intermediate',
+    plan: 'paid' as const,
   },
   {
     userId: 'u7',
     name: 'S. Nakagawa',
     email: 's.nakagawa@example.com',
     level: 'basic',
+    plan: 'paid' as const,
   },
   {
     userId: 'u8',
     name: 'P. Novotny',
     email: 'p.novotny@example.com',
     level: 'advanced',
+    plan: 'paid' as const,
   },
 ];
 
@@ -142,6 +150,15 @@ const Harness = ({
             onRemove={(userId) =>
               setUsers((prev) => prev.filter((p) => p.userId !== userId))
             }
+            onTogglePlan={(userId) =>
+              setUsers((prev) =>
+                prev.map((p) =>
+                  p.userId === userId
+                    ? { ...p, plan: p.plan === 'paid' ? 'free' : 'paid' }
+                    : p,
+                ),
+              )
+            }
           />
         }
         onSubmit={() => {}}
@@ -190,6 +207,7 @@ export const FourteenPeople: Story = {
           name: `Student ${i + 6}`,
           email: `student${i + 6}@example.com`,
           level: null,
+          plan: 'paid' as const,
         })),
       ]}
     />

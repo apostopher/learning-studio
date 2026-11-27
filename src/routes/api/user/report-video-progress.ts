@@ -64,6 +64,12 @@ export async function reportVideoProgressHandler(
   if (gate.outOfTier) {
     return new Response('Forbidden', { status: 403 });
   }
+  // A preview (a free seat on a paid lesson) plays only the opening, so its
+  // coverage is of a clip: counted, the clip's end would read as the video
+  // watched. The player sends nothing in preview; this does not rely on it.
+  if (gate.videoPreviewSeconds !== null) {
+    return new Response('Forbidden', { status: 403 });
+  }
 
   const lessonId = await getLessonIdBySlug(parsed.data.lessonSlug);
   if (lessonId === null) {

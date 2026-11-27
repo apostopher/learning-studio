@@ -327,4 +327,40 @@ describe('VideoPlayer', () => {
     expect(container.querySelector('.vp-volume-slider')).toBeTruthy();
     expect(screen.getByRole('button', { name: /mute/i })).toBeTruthy();
   });
+
+  it('shows a preview against the whole video, with the held-back rest in red', () => {
+    const ref = createRef<HTMLVideoElement>();
+    const { container } = render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        state={{ currentTime: 5, duration: 18 }}
+        preview={{ seconds: 15, fullDurationSeconds: 853 }}
+      />,
+    );
+    // The clock reads the whole video, not the clip's 0:18.
+    expect(container.querySelector('.vp-time')?.textContent).toBe(
+      '0:05 / 14:13',
+    );
+    const locked = screen.getByTestId('vp-locked-range');
+    expect(locked.style.insetInlineStart).toBe(`${(15 / 853) * 100}%`);
+    // Said in words too: the red stretch is invisible to a screen reader.
+    expect(
+      screen
+        .getAllByRole('slider')
+        .map((slider) => slider.getAttribute('aria-valuetext')),
+    ).toContain('0:05 of 14:13, preview ends at 0:15');
+  });
+
+  it('draws no held-back range for a full video', () => {
+    const ref = createRef<HTMLVideoElement>();
+    render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        state={{ currentTime: 5, duration: 853 }}
+      />,
+    );
+    expect(screen.queryByTestId('vp-locked-range')).toBeNull();
+  });
 });

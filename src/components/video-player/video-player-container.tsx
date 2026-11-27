@@ -17,6 +17,11 @@ import {
   requestReattach,
 } from './media-failure';
 import {
+  clampToPreview,
+  hasReachedPreviewCap,
+  previewPlayFrom,
+} from './preview-cap';
+import {
   applyRestorePoint,
   captureRestorePoint,
   isLanguageSwitch,
@@ -108,6 +113,7 @@ export const VideoPlayerContainer = ({
   onLanguageChange,
   onPlaybackFailed,
   resumeAt,
+  preview,
   ...rest
 }: ContainerProps) => {
   const generatedId = useId();
@@ -318,10 +324,44 @@ export const VideoPlayerContainer = ({
     };
   }, [rest.src, rest.kind, attachKey, setState, setReattach]);
 
+  // A preview stops at its cap, whatever moved the playhead there.
+  const previewRef = useRef(preview);
+  useEffect(() => {
+    previewRef.current = preview;
+  }, [preview]);
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const hold = () => {
+      const cap = previewRef.current;
+      if (!cap || !hasReachedPreviewCap(v.currentTime, cap)) return;
+      v.pause();
+      v.currentTime = cap.seconds;
+    };
+    v.addEventListener('timeupdate', hold);
+    v.addEventListener('seeking', hold);
+    return () => {
+      v.removeEventListener('timeupdate', hold);
+      v.removeEventListener('seeking', hold);
+    };
+  }, []);
+
   const seekTo = (time: number) => {
     const v = videoRef.current;
     if (!v || !Number.isFinite(time)) return;
-    v.currentTime = Math.max(0, Math.min(time, v.duration || time));
+    v.currentTime = clampToPreview(
+      Math.max(0, Math.min(time, v.duration || time)),
+      preview,
+    );
+  };
+
+  // Play from the cap starts the preview over rather than doing nothing.
+  const play = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const from = previewPlayFrom(v.currentTime, preview);
+    if (from !== null) v.currentTime = from;
+    void v.play();
   };
 
   // Flips state only; the mode effect below applies it to the text tracks.
@@ -399,7 +439,7 @@ export const VideoPlayerContainer = ({
       case ' ':
       case 'k':
       case 'K':
-        if (state.paused) v.play();
+        if (state.paused) play();
         else v.pause();
         break;
       case 'ArrowLeft':
@@ -443,7 +483,7 @@ export const VideoPlayerContainer = ({
   };
 
   const actions: VideoPlayerActions = {
-    onPlay: () => videoRef.current?.play(),
+    onPlay: play,
     onPause: () => videoRef.current?.pause(),
     onSeek: seekTo,
     onSeekRelative: (delta) => seekTo(state.currentTime + delta),
@@ -523,6 +563,7 @@ export const VideoPlayerContainer = ({
       state={state}
       actions={actions}
       overlay={overlay}
+      preview={preview}
     />
   );
 };

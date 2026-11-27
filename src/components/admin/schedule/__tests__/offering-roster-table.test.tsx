@@ -10,21 +10,105 @@ vi.mock('react', async () => {
 });
 
 describe('OfferingRosterTable row height', () => {
-  it('truncates long name and email to one line, keeping the full value in title', () => {
+  it('truncates a long name to one line, and gives its email to assistive tech', () => {
     const email = `${'very-long-address-'.repeat(6)}@example.com`;
     const name = 'Alexandria Montgomery-Featherstonehaugh the Third';
     render(
       <OfferingRosterTable
-        users={[{ userId: 'u1', name, email, level: null }]}
+        users={[{ userId: 'u1', name, email, level: null, plan: 'paid' }]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
       />,
     );
-    const emailEl = screen.getByText(email);
-    expect(emailEl.getAttribute('title')).toBe(email);
-    expect(emailEl.className).toContain('truncate');
     const nameEl = screen.getByText(name);
-    expect(nameEl.getAttribute('title')).toBe(name);
     expect(nameEl.className).toContain('truncate');
+    // No Email column (2026-11-28): the address is the name's tooltip, and
+    // in the cell for a screen reader, which a hover tooltip never reaches.
+    expect(nameEl.textContent).toBe(`${name}, ${email}`);
+    expect(screen.queryByRole('columnheader', { name: 'Email' })).toBeNull();
+  });
+});
+
+describe('OfferingRosterTable plan and remove', () => {
+  const seat = (plan: 'paid' | 'free') => ({
+    userId: 'u1',
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    level: null,
+    plan,
+  });
+
+  it('heads the column Plan', () => {
+    render(
+      <OfferingRosterTable
+        users={[seat('paid')]}
+        onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('columnheader', { name: 'Plan' })).toBeTruthy();
+  });
+
+  it('shows a paid seat as PAID and flips it on a press', () => {
+    const onTogglePlan = vi.fn();
+    render(
+      <OfferingRosterTable
+        users={[seat('paid')]}
+        onRemove={vi.fn()}
+        onTogglePlan={onTogglePlan}
+      />,
+    );
+    const chip = screen.getByRole('button', { name: /^Plan for Ada Lovelace/ });
+    expect(chip.textContent).toBe('Paid');
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(chip);
+    expect(onTogglePlan).toHaveBeenCalledWith('u1');
+  });
+
+  it('shows a free seat as FREE and says what it plays', () => {
+    render(
+      <OfferingRosterTable
+        users={[seat('free')]}
+        onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
+      />,
+    );
+    const chip = screen.getByRole('button', { name: /^Plan for Ada Lovelace/ });
+    expect(chip.textContent).toBe('Free');
+    expect(chip.getAttribute('aria-label')).toMatch(/first 15 seconds/);
+  });
+
+  it('locks the plan while the offering saves', () => {
+    const onTogglePlan = vi.fn();
+    render(
+      <OfferingRosterTable
+        users={[seat('paid')]}
+        onRemove={vi.fn()}
+        onTogglePlan={onTogglePlan}
+        disabled
+      />,
+    );
+    const chip = screen.getByRole('button', { name: /^Plan for Ada Lovelace/ });
+    expect(chip.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(chip);
+    expect(onTogglePlan).not.toHaveBeenCalled();
+  });
+
+  it('removes with an icon button that names the person', () => {
+    const onRemove = vi.fn();
+    render(
+      <OfferingRosterTable
+        users={[seat('paid')]}
+        onRemove={onRemove}
+        onTogglePlan={vi.fn()}
+      />,
+    );
+    const button = screen.getByRole('button', {
+      name: 'Remove Ada Lovelace from this offering',
+    });
+    expect(button.textContent).toBe('');
+    fireEvent.click(button);
+    expect(onRemove).toHaveBeenCalledWith('u1');
   });
 });
 
@@ -34,12 +118,14 @@ describe('OfferingRosterTable level cell', () => {
     name: 'Ada Lovelace',
     email: 'ada@example.com',
     level: 'intermediate' as const,
+    plan: 'paid' as const,
   };
   const bob = {
     userId: 'u2',
     name: 'Bob Hoover',
     email: 'bob@example.com',
     level: null,
+    plan: 'paid' as const,
   };
   const adaChip = () =>
     screen.getByRole('button', {
@@ -51,6 +137,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
         onCycleLevel={vi.fn()}
@@ -74,6 +161,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
         onCycleLevel={onCycleLevel}
@@ -88,6 +176,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
         onCycleLevel={vi.fn()}
@@ -107,6 +196,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
         onCycleLevel={onCycleLevel}
@@ -131,6 +221,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels={false}
         levelLockReason={() => null}
         onCycleLevel={vi.fn()}
@@ -147,6 +238,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada, bob]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels
         levelLockReason={(userId) =>
           userId === 'u1'
@@ -173,6 +265,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels={false}
         onCycleLevel={vi.fn()}
       />,
@@ -190,6 +283,7 @@ describe('OfferingRosterTable level cell', () => {
       <OfferingRosterTable
         users={[ada]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
         canEditLevels
         levelLockReason={() => null}
         onCycleLevel={onCycleLevel}
@@ -209,8 +303,17 @@ describe('OfferingRosterTable level cell', () => {
   it('heads the level column 3D', () => {
     render(
       <OfferingRosterTable
-        users={[{ userId: 'u1', name: 'Ada', email: 'a@x.com', level: null }]}
+        users={[
+          {
+            userId: 'u1',
+            name: 'Ada',
+            email: 'a@x.com',
+            level: null,
+            plan: 'paid',
+          },
+        ]}
         onRemove={vi.fn()}
+        onTogglePlan={vi.fn()}
       />,
     );
     expect(screen.getByRole('columnheader', { name: '3D' })).toBeTruthy();

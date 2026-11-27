@@ -112,3 +112,40 @@ describe('computePlayerOverlay', () => {
     ).toBe('coverage');
   });
 });
+
+describe('computePlayerOverlay in a preview', () => {
+  const preview = { seconds: 15, fullDurationSeconds: 853 };
+
+  it('says the preview ended when paused at the cap', () => {
+    expect(
+      computePlayerOverlay({
+        reachedEnd: false,
+        playback: { paused: true, currentTime: 15, duration: 18 },
+        materialLocked: false,
+        preview,
+      }),
+    ).toBe('preview-ended');
+  });
+
+  it('comes off the moment they play again', () => {
+    expect(
+      computePlayerOverlay({
+        reachedEnd: false,
+        playback: { paused: false, currentTime: 2, duration: 18 },
+        materialLocked: false,
+        preview,
+      }),
+    ).toBe('none');
+  });
+
+  it('never shows the coverage notice: a preview cannot be watched through', () => {
+    expect(
+      computePlayerOverlay({
+        reachedEnd: true,
+        playback: { paused: true, currentTime: 18, duration: 18 },
+        materialLocked: true,
+        preview,
+      }),
+    ).toBe('preview-ended');
+  });
+});

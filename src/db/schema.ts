@@ -44,8 +44,9 @@ import {
   PersonaSchema,
   PilotLicensesSchema,
   ProfileVisibilitySchema,
-  StoredUserLevelSchema,
+  type SeatPlan,
   type StoredUserLevel,
+  StoredUserLevelSchema,
   SubscriptionsSchema,
 } from '#/types';
 
@@ -174,6 +175,11 @@ export const offeringUsersTable = pgTable(
       .references(() => userProfileTable.userId, { onDelete: 'cascade' }),
     /** Acting admin's user id. */
     assignedBy: varchar('assigned_by', { length: 255 }),
+    /**
+     * Paid or free. A free seat sees only the first 15 seconds of a paid
+     * lesson's video. Added by `migrate-offering-seat-plan.ts`.
+     */
+    plan: text('plan').$type<SeatPlan>().notNull().default('paid'),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [

@@ -2,6 +2,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db } from '#/db';
 import { coursesTable, offeringsTable, offeringUsersTable } from '#/db/schema';
 import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
+import type { SeatPlan } from '#/types';
 
 /**
  * Who may take a course: the people on any of its offerings, whatever the
@@ -120,4 +121,32 @@ export async function getMyOfferingWindows(
         notFlagship(),
       ),
     );
+}
+
+/**
+ * The user's plan on this course: `paid` when ANY of their seats on its
+ * offerings is paid, `free` when every one is free, null when they hold none.
+ *
+ * Any paid seat wins: someone moved from a free run to a paid one keeps the
+ * free seat on the old offering, and must not be held to it.
+ */
+export async function seatPlanForCourse(
+  userId: string,
+  courseId: number,
+): Promise<SeatPlan | null> {
+  const rows = await db
+    .selectDistinct({ plan: offeringUsersTable.plan })
+    .from(offeringUsersTable)
+    .innerJoin(
+      offeringsTable,
+      eq(offeringsTable.id, offeringUsersTable.offeringId),
+    )
+    .where(
+      and(
+        eq(offeringUsersTable.userId, userId),
+        eq(offeringsTable.courseId, courseId),
+      ),
+    );
+  if (rows.length === 0) return null;
+  return rows.some((row) => row.plan === 'paid') ? 'paid' : 'free';
 }

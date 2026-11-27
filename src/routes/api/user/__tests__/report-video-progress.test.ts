@@ -41,6 +41,7 @@ beforeEach(() => {
   evaluateLessonGate.mockResolvedValue({
     subscribed: true,
     lessonLock: { kind: 'open' },
+    videoPreviewSeconds: null,
   });
   getLessonIdBySlug.mockResolvedValue(10);
   settleProgress.mockResolvedValue(null);
@@ -60,6 +61,7 @@ describe('out-of-tier progress reports', () => {
       level: 'intermediate',
       outOfTier: { readOnly: false },
       lessonLock: { kind: 'open' },
+      videoPreviewSeconds: null,
     });
     const res = await reportVideoProgressHandler(
       postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 50 }),
@@ -75,6 +77,7 @@ describe('out-of-tier progress reports', () => {
       level: 'intermediate',
       outOfTier: { readOnly: true },
       lessonLock: { kind: 'open' },
+      videoPreviewSeconds: null,
     });
     const res = await reportVideoProgressHandler(
       postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 95 }),
@@ -159,6 +162,7 @@ describe('reportVideoProgressHandler', () => {
     evaluateLessonGate.mockResolvedValue({
       subscribed: false,
       lessonLock: { kind: 'open' },
+      videoPreviewSeconds: null,
     });
     const res = await reportVideoProgressHandler(
       new Request('http://t', {
@@ -216,6 +220,7 @@ describe('settling progress after a write', () => {
       subscribed: true,
       courseSlug: 'c-gate',
       lessonLock: { kind: 'open' },
+      videoPreviewSeconds: null,
     });
     const res = await reportVideoProgressHandler(
       postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 50 }),
@@ -225,5 +230,22 @@ describe('settling progress after a write', () => {
       courseSlug: 'c-gate',
     });
     expect((await res.json()).promotion).toEqual(promotion);
+  });
+});
+
+/** A preview's coverage is of a clip: its end must never read as watched. */
+describe('free-seat preview progress', () => {
+  it('403s a capped lesson without writing', async () => {
+    evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      outOfTier: null,
+      lessonLock: { kind: 'open' },
+      videoPreviewSeconds: 15,
+    });
+    const res = await reportVideoProgressHandler(
+      postReq({ lessonSlug: 'l1', courseSlug: 'c1', progress: 100 }),
+    );
+    expect(res.status).toBe(403);
+    expect(recordLessonProgress).not.toHaveBeenCalled();
   });
 });

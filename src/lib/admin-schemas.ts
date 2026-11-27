@@ -10,8 +10,8 @@ import {
   LessonLevelsSchema,
   LessonMaterialGenerationSchema,
   OtherVideoIdSchema,
-  SubscriptionsSchema,
   StoredUserLevelSchema,
+  SubscriptionsSchema,
   UserLevelSchema,
 } from '#/types';
 
@@ -540,6 +540,13 @@ export const lessonPlaybackReadySchema = z.object({
   expiresInSeconds: z.number().nonnegative().nullable(),
   poster: z.string().nullable(),
   captions: z.object({ vtt: z.string() }).nullable(),
+  /** Only the opening plays (a free seat on a paid lesson). See `Playback`. */
+  preview: z
+    .object({
+      seconds: z.number().positive(),
+      fullDurationSeconds: z.number().positive().nullable(),
+    })
+    .optional(),
 });
 
 /** A video the provider holds but cannot serve yet. Mirrors `PlaybackPending`. */

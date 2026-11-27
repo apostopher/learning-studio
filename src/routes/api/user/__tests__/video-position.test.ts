@@ -41,6 +41,7 @@ beforeEach(() => {
   evaluateLessonGate.mockResolvedValue({
     subscribed: true,
     lessonLock: { kind: 'open' },
+    videoPreviewSeconds: null,
   });
   getLessonIdBySlug.mockResolvedValue(10);
 });
@@ -100,6 +101,7 @@ describe('saveVideoPositionHandler', () => {
         subscribed: true,
         outOfTier: { readOnly: false },
         lessonLock: { kind: 'open' },
+        videoPreviewSeconds: null,
       },
     ],
   ])('403 for %s, without writing', async (_label, gate) => {
@@ -115,6 +117,7 @@ describe('saveVideoPositionHandler', () => {
       subscribed: true,
       outOfTier: { readOnly: true },
       lessonLock: { kind: 'open' },
+      videoPreviewSeconds: null,
     });
     expect((await saveVideoPositionHandler(postReq(BODY))).status).toBe(204);
     expect(saveResumePosition).toHaveBeenCalled();
@@ -123,5 +126,18 @@ describe('saveVideoPositionHandler', () => {
   it('500 when the write fails', async () => {
     saveResumePosition.mockRejectedValueOnce(new Error('db down'));
     expect((await saveVideoPositionHandler(postReq(BODY))).status).toBe(500);
+  });
+});
+
+describe('free-seat preview position', () => {
+  it('403s a capped lesson without writing', async () => {
+    evaluateLessonGate.mockResolvedValueOnce({
+      subscribed: true,
+      outOfTier: null,
+      lessonLock: { kind: 'open' },
+      videoPreviewSeconds: 15,
+    });
+    expect((await saveVideoPositionHandler(postReq(BODY))).status).toBe(403);
+    expect(saveResumePosition).not.toHaveBeenCalled();
   });
 });

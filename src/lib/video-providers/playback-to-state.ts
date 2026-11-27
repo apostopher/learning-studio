@@ -39,6 +39,7 @@ export const playbackToState = (
     captionsUnavailable: result.captions === null,
     lang,
     languages,
+    ...(result.preview ? { preview: result.preview } : {}),
     onRetry,
   };
 };

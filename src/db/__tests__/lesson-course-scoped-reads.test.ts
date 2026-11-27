@@ -310,9 +310,10 @@ describe('getLessonPlayback is scoped and cached per course', () => {
     const allLangs = [PRIMARY_VIDEO_LANG, ...VIDEO_LANGUAGES];
     const expectedKeys = [2, 6].flatMap((courseId) =>
       [30, 31].flatMap((versionId) =>
-        allLangs.map(
-          (lang) => `lesson-playback:${courseId}:l1:${versionId}:${lang}`,
-        ),
+        allLangs.flatMap((lang) => [
+          `lesson-playback:${courseId}:l1:${versionId}:${lang}`,
+          `lesson-playback:${courseId}:l1:${versionId}:${lang}:preview15`,
+        ]),
       ),
     );
     expect(redis.del.mock.calls).toEqual([expectedKeys]);

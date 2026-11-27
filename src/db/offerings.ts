@@ -48,6 +48,7 @@ async function loadUsersByOffering(
       .select({
         offeringId: offeringUsersTable.offeringId,
         userId: offeringUsersTable.userId,
+        plan: offeringUsersTable.plan,
         firstName: userProfileTable.firstName,
         lastName: userProfileTable.lastName,
         email: userProfileTable.email,
@@ -91,6 +92,7 @@ async function loadUsersByOffering(
       name: personName(row),
       email: row.email,
       level: levelByUserCourse.get(`${row.userId}:${courseId}`) ?? null,
+      plan: row.plan,
     });
     byOffering.set(row.offeringId, list);
   }
@@ -202,7 +204,26 @@ async function replaceRoster(
   offeringId: number,
   userIds: string[],
   actorId: string | null,
+  /**
+   * Who sits on a free seat. Undefined keeps each remaining person's plan as
+   * stored (a write from a tab that predates plans); a newcomer is paid.
+   */
+  freeUserIds: string[] | undefined,
 ): Promise<void> {
+  const free = new Set(
+    freeUserIds ??
+      (
+        await tx
+          .select({ userId: offeringUsersTable.userId })
+          .from(offeringUsersTable)
+          .where(
+            and(
+              eq(offeringUsersTable.offeringId, offeringId),
+              eq(offeringUsersTable.plan, 'free'),
+            ),
+          )
+      ).map((row) => row.userId),
+  );
   await tx
     .delete(offeringUsersTable)
     .where(eq(offeringUsersTable.offeringId, offeringId));
@@ -217,13 +238,14 @@ async function replaceRoster(
       offeringId,
       userId,
       assignedBy: actorId,
+      plan: free.has(userId) ? ('free' as const) : ('paid' as const),
     })),
   );
 }
 
 /** Schedule a course. Returns the created offering, roster included. */
 export async function createOffering(
-  input: CreateOfferingInput,
+  input: Omit<CreateOfferingInput, 'freeUserIds'> & { freeUserIds?: string[] },
   actorId: string | null,
 ): Promise<Offering> {
   const id = await db.transaction(async (tx) => {
@@ -237,7 +259,13 @@ export async function createOffering(
         createdBy: actorId,
       })
       .returning({ id: offeringsTable.id });
-    await replaceRoster(tx, created.id, input.userIds, actorId);
+    await replaceRoster(
+      tx,
+      created.id,
+      input.userIds,
+      actorId,
+      input.freeUserIds,
+    );
     return created.id;
   });
 
@@ -267,7 +295,7 @@ export async function updateOffering(
       .where(eq(offeringsTable.id, id))
       .returning({ id: offeringsTable.id });
     if (!row) return false;
-    await replaceRoster(tx, id, input.userIds, actorId);
+    await replaceRoster(tx, id, input.userIds, actorId, input.freeUserIds);
     return true;
   });
 

@@ -1,4 +1,7 @@
-export type PlayerOverlayKind = 'coverage' | 'none';
+import { isPreviewEnded } from '#/components/video-player/preview-cap';
+import type { VideoPreview } from '#/components/video-player/types';
+
+export type PlayerOverlayKind = 'coverage' | 'preview-ended' | 'none';
 
 /**
  * How close to `duration` still counts as "sitting at the end".
@@ -27,6 +30,8 @@ export type ComputePlayerOverlayArgs = {
   playback: { paused: boolean; currentTime: number; duration: number };
   /** Already narrowed to the 'video' lock reason — see lesson-player-container.tsx. */
   materialLocked: boolean;
+  /** Set when only the opening plays (a free seat on a paid lesson). */
+  preview?: VideoPreview;
 };
 
 /**
@@ -64,7 +69,11 @@ export function computePlayerOverlay({
   reachedEnd,
   playback,
   materialLocked,
+  preview,
 }: ComputePlayerOverlayArgs): PlayerOverlayKind {
+  // Paused at the cap; off again the moment they play or seek back.
+  if (preview)
+    return isPreviewEnded(playback, preview) ? 'preview-ended' : 'none';
   if (!reachedEnd) return 'none';
   if (!isRestingAtEnd(playback)) return 'none';
   return materialLocked ? 'coverage' : 'none';

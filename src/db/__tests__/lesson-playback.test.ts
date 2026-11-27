@@ -417,10 +417,13 @@ describe('getLessonPlayback.invalidate', () => {
         'lesson-playback:3:l1:30:en',
         'lesson-playback:3:l1:31:fr-CA',
         'lesson-playback:4:l1:31:ja',
+        // The free-seat preview is cached apart, and goes with the rest.
+        'lesson-playback:3:l1:30:en:preview15',
+        'lesson-playback:4:l1:31:ja:preview15',
       ]),
     );
-    // 2 courses × 2 versions × (en + 11 alternates)
-    expect(new Set(keys).size).toBe(48);
+    // 2 courses × 2 versions × (en + 11 alternates) × (full + preview)
+    expect(new Set(keys).size).toBe(96);
   });
 
   it('sends no DEL for a lesson no course has taken', async () => {

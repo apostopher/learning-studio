@@ -13,6 +13,17 @@ export type VideoPlayerStatus =
  */
 export type VideoCaption = { src: string; lang: string; label: string };
 
+/**
+ * Only the first `seconds` may play (a free seat on a paid lesson).
+ * `fullDurationSeconds` is the whole video's length, shown on the clock and
+ * the scrubber so the held-back part is visible; null when unknown, and the
+ * player then shows the media's own length.
+ */
+export type VideoPreview = {
+  seconds: number;
+  fullDurationSeconds: number | null;
+};
+
 export type VideoPlayerState = {
   paused: boolean;
   currentTime: number;
@@ -116,4 +127,6 @@ export type VideoPlayerProps = Omit<
   languages?: VideoLanguageOption[];
   /** `code` of the language currently playing. */
   activeLanguage?: string;
+  /** Only the opening plays; the rest of the scrubber is shown held back. */
+  preview?: VideoPreview;
 };

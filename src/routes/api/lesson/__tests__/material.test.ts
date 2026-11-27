@@ -37,6 +37,7 @@ const openGate = {
   outOfTier: null,
   lessonLock: { kind: 'open' },
   materialLock: { kind: 'open' },
+  videoPreviewSeconds: null,
 };
 
 describe('getLessonMaterialHandler', () => {
@@ -80,6 +81,7 @@ describe('getLessonMaterialHandler', () => {
     evaluateLessonGate.mockResolvedValue({
       ...openGate,
       materialLock: { kind: 'video-locked' },
+      videoPreviewSeconds: null,
     });
     const res = await getLessonMaterialHandler(req());
     expect(res.status).toBe(200);
@@ -139,6 +141,7 @@ describe('getLessonMaterialHandler', () => {
     evaluateLessonGate.mockResolvedValue({
       ...openGate,
       materialLock: { kind: 'video-locked' },
+      videoPreviewSeconds: null,
     });
     getCourseLessonMaterial.mockResolvedValue(null);
     const res = await getLessonMaterialHandler(req());
@@ -300,6 +303,7 @@ describe('recording the visit', () => {
     evaluateLessonGate.mockResolvedValue({
       ...openGate,
       materialLock: { kind: 'video-locked' },
+      videoPreviewSeconds: null,
     });
     await getLessonMaterialHandler(req());
     expect(recordLessonVisit).not.toHaveBeenCalled();

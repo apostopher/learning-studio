@@ -74,6 +74,8 @@ export async function getLessonPlaybackHandler(
       courseId: gate.courseId,
       skipCache: fresh,
       lang,
+      // A free seat on a paid lesson: a stream that ends at the cap.
+      previewSeconds: gate.videoPreviewSeconds,
     });
     if (!playback) return new Response('Forbidden', { status: 403 });
     return Response.json(playback);

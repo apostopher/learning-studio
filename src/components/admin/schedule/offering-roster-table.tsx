@@ -5,13 +5,16 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Loader2 } from 'lucide-react';
+import { CircleMinus, Loader2 } from 'lucide-react';
 import { MotionConfig, motion } from 'motion/react';
 import { type ChipTone, chipClassName } from '#/components/ui/chip';
-import { IconButtonTooltip } from '#/components/ui/tooltip-icon-button';
+import {
+  IconButtonTooltip,
+  TooltipIconButton,
+} from '#/components/ui/tooltip-icon-button';
 import { LEVEL_ACRONYMS, LEVEL_LABELS } from '#/lib/level-labels';
 import type { OfferingUser } from '#/lib/offering-schemas';
-import { currentUserLevel, type UserLevel } from '#/types';
+import { currentUserLevel, type SeatPlan, type UserLevel } from '#/types';
 import { nextRosterLevel, toRosterLevel } from './roster-level';
 
 /**
@@ -124,6 +127,57 @@ const LevelCycleChip = ({
 );
 
 /**
+ * The seat's plan: one chip that flips PAID ⇄ FREE on each press, the same
+ * words and tones as the lesson card's chip. Part of the roster, so it saves
+ * with the offering. PAID and FREE are both four letters over the chip's
+ * min-width, so a flip never moves the row.
+ */
+const PlanToggleChip = ({
+  name,
+  plan,
+  disabled,
+  onToggle,
+}: {
+  name: string;
+  plan: SeatPlan;
+  disabled: boolean;
+  onToggle: () => void;
+}) => {
+  const paid = plan === 'paid';
+  const what = paid
+    ? 'Paid: plays every lesson in full'
+    : 'Free: plays the first 15 seconds of a paid lesson’s video';
+  const label = disabled
+    ? `${what}. ${LOCKED_NOTE}`
+    : `${what}. Press to make it ${paid ? 'free' : 'paid'}.`;
+  return (
+    // Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`.
+    <Tooltip.Root disableHoverablePopup>
+      <Tooltip.Trigger
+        aria-disabled={disabled || undefined}
+        aria-label={`Plan for ${name}: ${label}`}
+        aria-pressed={paid}
+        render={
+          <motion.button
+            type="button"
+            onClick={disabled ? undefined : onToggle}
+            whileTap={disabled ? undefined : { scale: 0.92 }}
+            transition={PRESS_SPRING}
+          />
+        }
+        className={chipClassName(
+          paid ? 'solid-success' : 'muted',
+          'cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-apple-9 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed',
+        )}
+      >
+        {paid ? 'Paid' : 'Free'}
+      </Tooltip.Trigger>
+      <IconButtonTooltip label={label} />
+    </Tooltip.Root>
+  );
+};
+
+/**
  * Who is on this offering.
  *
  * A table rather than a row of chips: a roster is a list of PEOPLE with facts
@@ -137,6 +191,7 @@ const LevelCycleChip = ({
 export const OfferingRosterTable = ({
   users,
   onRemove,
+  onTogglePlan,
   disabled = false,
   canEditLevels = false,
   levelLockReason = () => null,
@@ -146,6 +201,8 @@ export const OfferingRosterTable = ({
 }: {
   users: OfferingUser[];
   onRemove: (userId: string) => void;
+  /** The PLAN chip was pressed: flip this seat between paid and free. */
+  onTogglePlan: (userId: string) => void;
   disabled?: boolean;
   /** `level:update` — without it every level is a read-only chip. */
   canEditLevels?: boolean;
@@ -170,25 +227,22 @@ export const OfferingRosterTable = ({
     {
       accessorKey: 'name',
       header: 'Name',
+      // No Email column (user, 2026-11-28): the address is the name's
+      // tooltip, which gave the PLAN column its room. Also in the cell for
+      // assistive tech, which a hover tooltip never reaches.
       cell: ({ row }) => (
-        <span
-          className="block truncate font-medium text-primary"
-          title={row.original.name}
-        >
-          {row.original.name}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'email',
-      header: 'Email',
-      cell: ({ row }) => (
-        <span
-          className="block truncate font-mono text-secondary text-xs"
-          title={row.original.email}
-        >
-          {row.original.email}
-        </span>
+        <Tooltip.Root disableHoverablePopup>
+          <Tooltip.Trigger
+            render={<span />}
+            className="block truncate font-medium text-primary"
+          >
+            {row.original.name}
+            {row.original.email !== row.original.name && (
+              <span className="sr-only">, {row.original.email}</span>
+            )}
+          </Tooltip.Trigger>
+          <IconButtonTooltip label={row.original.email} />
+        </Tooltip.Root>
       ),
     },
     {
@@ -241,20 +295,32 @@ export const OfferingRosterTable = ({
       },
     },
     {
+      accessorKey: 'plan',
+      header: 'Plan',
+      cell: ({ row }) => (
+        <PlanToggleChip
+          name={row.original.name}
+          plan={row.original.plan}
+          disabled={disabled}
+          onToggle={() => onTogglePlan(row.original.userId)}
+        />
+      ),
+    },
+    {
       id: 'actions',
       header: () => <span className="sr-only">Actions</span>,
+      // Icon only, the lesson card's remove icon. Names the person: a column
+      // of twenty identical "Remove" buttons is unusable to anyone navigating
+      // by control.
       cell: ({ row }) => (
-        <button
-          type="button"
+        <TooltipIconButton
+          label={`Remove ${row.original.name} from this offering`}
+          variant="danger"
           disabled={disabled}
           onClick={() => onRemove(row.original.userId)}
-          // Names the person: a column of twenty identical "Remove" buttons is
-          // unusable to anyone navigating by control.
-          aria-label={`Remove ${row.original.name} from this offering`}
-          className="whitespace-nowrap rounded-md border border-gray-6 px-2 py-1 font-medium text-secondary text-xs transition-colors hover:border-error-9 hover:bg-error-3 hover:text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error-9 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Remove
-        </button>
+          <CircleMinus className="h-4 w-4" aria-hidden="true" />
+        </TooltipIconButton>
       ),
     },
   ];
@@ -299,14 +365,14 @@ export const OfferingRosterTable = ({
         >
           <table className="w-full table-fixed border-collapse text-sm">
             {/* Fixed layout: column widths, not content, decide where long names
-            and emails truncate, so a row can never outgrow the popover. Name
-            takes 40%, Email the remainder after Level and actions. Level is
-            wide enough for the widest chip plus its saving spinner. */}
+            truncate, so a row can never outgrow the popover. Name takes what
+            the rest leave. 3D is wide enough for the widest chip plus its
+            saving spinner; Plan for one chip; actions for one icon. */}
             <colgroup>
-              <col className="w-[40%]" />
               <col />
               <col className="w-28" />
               <col className="w-24" />
+              <col className="w-14" />
             </colgroup>
             {/* Physical `top`: sticky offset is block-axis here and Tailwind v4 has
             no logical top utility. A CLAUDE.md-sanctioned exception. */}

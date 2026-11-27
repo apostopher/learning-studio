@@ -11,6 +11,7 @@ import { Scrubber } from './parts/scrubber';
 import { Spinner } from './parts/spinner';
 import { TimeDisplay } from './parts/time-display';
 import { VolumeControl } from './parts/volume-control';
+import { displayDuration } from './preview-cap';
 import type { VideoPlayerProps } from './types';
 
 export const VideoPlayer = ({
@@ -26,6 +27,7 @@ export const VideoPlayer = ({
   overlay,
   languages,
   activeLanguage,
+  preview,
   ...nativeRest
 }: VideoPlayerProps) => {
   const labels = { ...DEFAULT_LABELS, ...labelOverrides };
@@ -48,6 +50,9 @@ export const VideoPlayer = ({
   } = state ?? {};
   const a = actions ?? {};
   const reduced = useReducedMotion();
+  // A preview's stream ends near the cap, but the clock and the scrubber show
+  // the whole video, so what is held back is visible rather than hidden.
+  const shownDuration = displayDuration(duration, preview);
 
   const onSurfaceClick = paused ? a.onPlay : a.onPause;
   const surfaceLabel = paused ? labels.play : labels.pause;
@@ -180,10 +185,11 @@ export const VideoPlayer = ({
       >
         <Scrubber
           currentTime={currentTime}
-          duration={duration}
+          duration={shownDuration}
           bufferedEnd={bufferedEnd}
           seekLabel={labels.seek}
           onSeek={a.onSeek}
+          lockedFrom={preview?.seconds}
         />
         <div className="vp-controls-row">
           <PlayPauseButton
@@ -193,7 +199,7 @@ export const VideoPlayer = ({
             onPlay={a.onPlay}
             onPause={a.onPause}
           />
-          <TimeDisplay currentTime={currentTime} duration={duration} />
+          <TimeDisplay currentTime={currentTime} duration={shownDuration} />
           <VolumeControl
             volume={volume}
             muted={muted}

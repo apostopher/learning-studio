@@ -1,4 +1,7 @@
-import type { VideoCaption } from '#/components/video-player/types';
+import type {
+  VideoCaption,
+  VideoPreview,
+} from '#/components/video-player/types';
 import type { LockedMaterialResponse } from '#/lib/lesson-gating';
 import type { VideoLang } from '#/lib/video-languages';
 
@@ -20,6 +23,8 @@ export type VideoFetchState =
       lang: VideoLang;
       /** Every language this lesson offers, `en` first — drives the player's menu. */
       languages: VideoLang[];
+      /** Only the opening plays: a free seat on a paid lesson. */
+      preview?: VideoPreview;
       /**
        * Re-resolves this video's playback (fetches a fresh signed URL/token
        * from the server). Both providers' URLs are signed and expire —

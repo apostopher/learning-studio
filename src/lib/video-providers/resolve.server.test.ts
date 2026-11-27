@@ -50,7 +50,11 @@ vi.mock('../../integrations/synthesia/videos', () => ({
 }));
 
 import { PlaybackError } from './errors';
-import { resolvePlayback, validateCredentials } from './resolve.server';
+import {
+  resolvePlayback,
+  sumExtinf,
+  validateCredentials,
+} from './resolve.server';
 
 const muxCreds = { keyId: 'key_123', privateKey: 'priv_abc' };
 const synthesiaCreds = { apiKey: 'sk_test_123' };
@@ -539,5 +543,103 @@ describe('resolvePlayback — Mux captions', () => {
     });
     errorLog.mockRestore();
     expect(r).toMatchObject({ status: 'ready', captions: null });
+  });
+});
+
+/**
+ * A free seat on a paid lesson. The cap must reach Mux as a claim in the
+ * signed token — the only form Mux honours for a signed playback id, and one
+ * the viewer cannot edit — so it is asserted on what the signer received.
+ */
+describe('resolvePlayback preview', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Each token says what it is, so a leak of the unclipped one shows.
+    signPlaybackId.mockImplementation(
+      async (
+        _ref: string,
+        opts: { type?: string; params?: Record<string, string> },
+      ) =>
+        opts.type === 'thumbnail'
+          ? 'poster-token'
+          : opts.params
+            ? 'clipped-token'
+            : 'full-token',
+    );
+  });
+
+  const manifests = (fetchImpl: ReturnType<typeof vi.fn>) =>
+    fetchImpl.mockImplementation(async (url: string | URL) => {
+      const href = String(url);
+      if (href.includes('.m3u8?token=full-token')) {
+        return new Response(
+          '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nrendition.m3u8?x=1\n',
+        );
+      }
+      if (href.includes('rendition.m3u8')) {
+        return new Response(
+          '#EXTM3U\n#EXTINF:6.0,\na.ts\n#EXTINF:6.0,\nb.ts\n#EXTINF:841.5,\nc.ts\n',
+        );
+      }
+      return new Response('', { status: 404 });
+    });
+
+  it('signs the stream with an asset_end_time claim at the cap', async () => {
+    const fetchImpl = manifests(vi.fn());
+    const result = await resolvePlayback('mux', 'pb1', muxCreds, {
+      previewSeconds: 15,
+      fetchImpl,
+    });
+    if (result.status !== 'ready') throw new Error('expected ready');
+
+    expect(signPlaybackId).toHaveBeenCalledWith('pb1', {
+      keyId: 'key_123',
+      keySecret: 'priv_abc',
+      expiration: '3600s',
+      type: 'video',
+      params: { asset_end_time: '15' },
+    });
+    expect(result.url).toBe(
+      'https://stream.mux.com/pb1.m3u8?token=clipped-token',
+    );
+  });
+
+  it('reports the whole video’s length, read with a token it never returns', async () => {
+    const fetchImpl = manifests(vi.fn());
+    const result = await resolvePlayback('mux', 'pb1', muxCreds, {
+      previewSeconds: 15,
+      fetchImpl,
+    });
+    if (result.status !== 'ready') throw new Error('expected ready');
+
+    expect(result.preview).toEqual({ seconds: 15, fullDurationSeconds: 853.5 });
+    // The unclipped token is used server-side only.
+    expect(JSON.stringify(result)).not.toContain('full-token');
+  });
+
+  it('still plays the preview when the length cannot be read', async () => {
+    const fetchImpl = vi.fn(async () => new Response('', { status: 500 }));
+    const result = await resolvePlayback('mux', 'pb1', muxCreds, {
+      previewSeconds: 15,
+      fetchImpl,
+    });
+    if (result.status !== 'ready') throw new Error('expected ready');
+    expect(result.preview).toEqual({ seconds: 15, fullDurationSeconds: null });
+  });
+
+  it('adds no claim and no preview for a full playback', async () => {
+    const result = await resolvePlayback('mux', 'pb1', muxCreds);
+    if (result.status !== 'ready') throw new Error('expected ready');
+    expect(signPlaybackId.mock.calls[0][1]).not.toHaveProperty('params');
+    expect(result).not.toHaveProperty('preview');
+  });
+});
+
+describe('sumExtinf', () => {
+  it('adds up segment durations', () => {
+    expect(sumExtinf('#EXTINF:4.004,\na\n#EXTINF:2.5,title\nb')).toBe(6.504);
+  });
+  it('is null for a playlist with no segments', () => {
+    expect(sumExtinf('#EXTM3U\n')).toBeNull();
   });
 });

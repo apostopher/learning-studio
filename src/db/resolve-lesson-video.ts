@@ -36,6 +36,7 @@ export async function resolveSelectedLessonVideo({
   otherVideoIds,
   courseId,
   lang,
+  previewSeconds,
 }: {
   lessonId: number;
   provider: ProviderId;
@@ -43,6 +44,8 @@ export async function resolveSelectedLessonVideo({
   otherVideoIds: unknown;
   courseId: number;
   lang: VideoLang;
+  /** Play only the opening (a free seat on a paid lesson). */
+  previewSeconds?: number;
 }): Promise<LessonPlaybackResult> {
   // A column that fails the schema (a row written under the old
   // `{ lang: 'FR', videoId }` shape, or by hand) must not take the English
@@ -74,6 +77,7 @@ export async function resolveSelectedLessonVideo({
     {
       muxCaptions: (playbackId, servingCreds) =>
         muxCaptionsForPlayback(playbackId, servingCreds, lessonId),
+      previewSeconds,
     },
   );
   return { ...playback, lang: selection.lang, languages: selection.languages };

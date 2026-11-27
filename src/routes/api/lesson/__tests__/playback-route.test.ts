@@ -256,3 +256,42 @@ describe('lang', () => {
     );
   });
 });
+
+/**
+ * A free seat on a paid lesson: the gate reports the cap, and the resolver
+ * must be asked for a stream that ends there. Asserted on what the resolver
+ * received, since a cap computed and never passed on plays the whole video.
+ */
+describe('free-seat preview', () => {
+  it('asks for a 15-second stream when the gate caps the video', async () => {
+    m.evaluateLessonGate.mockResolvedValue({
+      courseSlug: 'c1',
+      courseId: 7,
+      subscribed: true,
+      lessonLock: { kind: 'open' },
+      outOfTier: null,
+      videoPreviewSeconds: 15,
+    });
+    expect((await getLessonPlaybackHandler(req('l1'))).status).toBe(200);
+    expect(m.getLessonPlayback).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({ courseId: 7, previewSeconds: 15 }),
+    );
+  });
+
+  it('asks for the whole video when the gate does not cap it', async () => {
+    m.evaluateLessonGate.mockResolvedValue({
+      courseSlug: 'c1',
+      courseId: 7,
+      subscribed: true,
+      lessonLock: { kind: 'open' },
+      outOfTier: null,
+      videoPreviewSeconds: null,
+    });
+    await getLessonPlaybackHandler(req('l1'));
+    expect(m.getLessonPlayback).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({ previewSeconds: null }),
+    );
+  });
+});

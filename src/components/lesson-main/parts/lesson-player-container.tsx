@@ -5,6 +5,7 @@ import { videoLanguageAtom } from '#/atoms/video-language';
 import { VideoPlayerContainer } from '#/components/video-player';
 import { videoPlayerStateAtomFamily } from '#/components/video-player/atoms';
 import { CoverageNotice } from '#/components/video-player/parts/coverage-notice';
+import { PreviewNotice } from '#/components/video-player/parts/preview-notice';
 import { resumeTargetFrom } from '#/components/video-player/resume-position';
 import { ResumePositionSaverContainer } from '#/components/video-player/resume-position-saver-container';
 import { useMilestoneReporter } from '#/components/video-player/use-milestone-reporter';
@@ -43,7 +44,12 @@ export const LessonPlayerContainer = ({
   // called.
   const { data } = useLessonMaterial(lesson);
   const readOnly = isMaterialReadOnly(data);
-  useMilestoneReporter(playerId, lesson, readOnly);
+  // A preview (a free seat on a paid lesson) plays a clip: it records no
+  // coverage, no playhead and no debrief prep, as a read-only view doesn't.
+  // The server refuses those writes for it too.
+  const preview = videoState.preview;
+  const recordsNothing = readOnly || preview !== undefined;
+  useMilestoneReporter(playerId, lesson, recordsNothing);
   const [reachedEnd, setReachedEnd] = useAtom(
     videoReachedEndAtomFamily(lessonSlug),
   );
@@ -108,7 +114,7 @@ export const LessonPlayerContainer = ({
     // props — the same answer `playbackHasCaptions` gives the material panel).
     materialText: material?.text,
     transcriptUsable: !videoState.captionsUnavailable,
-    readOnly,
+    readOnly: recordsNothing,
   });
 
   const overlayKind = computePlayerOverlay({
@@ -119,16 +125,19 @@ export const LessonPlayerContainer = ({
       duration: playerState.duration,
     },
     materialLocked,
+    preview,
   });
 
   return (
     <>
-      <ResumePositionSaverContainer
-        key={lessonSlug}
-        playerId={playerId}
-        courseSlug={courseSlug}
-        lessonSlug={lessonSlug}
-      />
+      {!preview && (
+        <ResumePositionSaverContainer
+          key={lessonSlug}
+          playerId={playerId}
+          courseSlug={courseSlug}
+          lessonSlug={lessonSlug}
+        />
+      )}
       <VideoPlayerContainer
         // Forces a genuine remount per lesson. Without this, TanStack Router
         // reuses this component across param changes (there is no other
@@ -147,17 +156,23 @@ export const LessonPlayerContainer = ({
         captions={videoState.captions}
         captionsUnavailable={videoState.captionsUnavailable}
         onSourceExpired={videoState.onRetry}
-        onEnded={onEnded}
+        onEnded={preview ? undefined : onEnded}
+        preview={preview}
         languages={languageOptions}
         activeLanguage={videoState.lang}
         onLanguageChange={onLanguageChange}
-        resumeAt={resumeAt}
+        // A preview always starts at 0:00: a saved position from a paid
+        // seat would land past the cap.
+        resumeAt={preview ? null : resumeAt}
         overlay={
           <AnimatePresence>
             {/* Not on an archive view: the coverage notice nudges toward
               finishing a lesson that is already done. */}
             {!readOnly && overlayKind === 'coverage' ? (
               <CoverageNotice hit={hit} total={watchedMilestones.length} />
+            ) : null}
+            {preview && overlayKind === 'preview-ended' ? (
+              <PreviewNotice seconds={preview.seconds} />
             ) : null}
           </AnimatePresence>
         }

@@ -41,6 +41,17 @@ export interface Playback {
    * them up — see `playbackCacheTtl`. Absent otherwise.
    */
   captionsPending?: true;
+  /**
+   * Set when only the opening of the video may play (a free seat on a paid
+   * lesson). `seconds` is the cap; `fullDurationSeconds` is the whole video's
+   * length, so the player can show what is held back, or null when it could
+   * not be read (the player then shows the preview's own length).
+   *
+   * On Mux the cap is enforced by the stream itself: the token carries an
+   * `asset_end_time` claim, so the manifest holds nothing past it. Synthesia
+   * serves one file, so there the player's stop is the only cap.
+   */
+  preview?: { seconds: number; fullDurationSeconds: number | null };
 }
 
 /** A video the provider holds but cannot serve yet. */
@@ -54,6 +65,58 @@ const MUX_TTL_SECONDS = 60 * 60; // 1h signed playback token
 
 const mux = new Mux();
 
+/**
+ * The whole video's length, read from its unclipped HLS manifest: the master
+ * playlist names the renditions, and the first rendition's `#EXTINF` segment
+ * durations sum to the video's length.
+ *
+ * Server-side only: the unclipped token it signs never leaves this function,
+ * so a preview viewer is never handed a URL to the rest of the video. Null on
+ * any failure — the length is for display, and the preview plays without it.
+ */
+async function readMuxFullDuration(
+  ref: string,
+  keyId: string,
+  privateKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<number | null> {
+  try {
+    const token = await mux.jwt.signPlaybackId(ref, {
+      keyId,
+      keySecret: privateKey,
+      expiration: '60s',
+      type: 'video',
+    });
+    const masterUrl = `https://stream.mux.com/${ref}.m3u8?token=${token}`;
+    const master = await fetchImpl(masterUrl);
+    if (!master.ok) return null;
+    const rendition = (await master.text())
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line !== '' && !line.startsWith('#'));
+    if (!rendition) return null;
+    const media = await fetchImpl(new URL(rendition, masterUrl));
+    if (!media.ok) return null;
+    return sumExtinf(await media.text());
+  } catch (error) {
+    console.error(`Mux duration lookup failed for ${ref}:`, error);
+    return null;
+  }
+}
+
+/** Sum of a media playlist's `#EXTINF:<seconds>,` lines, or null if none. */
+export function sumExtinf(playlist: string): number | null {
+  let total = 0;
+  let found = false;
+  for (const match of playlist.matchAll(/^#EXTINF:([\d.]+)/gm)) {
+    total += Number(match[1]);
+    found = true;
+  }
+  return found && Number.isFinite(total)
+    ? Math.round(total * 1000) / 1000
+    : null;
+}
+
 export async function resolvePlayback(
   provider: ProviderId,
   ref: string,
@@ -63,8 +126,13 @@ export async function resolvePlayback(
       playbackId: string,
       creds: unknown,
     ) => Promise<MuxCaptionsLookup>;
+    /** Play only the first this-many seconds (see `Playback.preview`). */
+    previewSeconds?: number;
+    /** For tests: the manifest reads behind `fullDurationSeconds`. */
+    fetchImpl?: typeof fetch;
   } = {},
 ): Promise<PlaybackResult> {
+  const { previewSeconds } = options;
   if (provider === 'mux') {
     const { keyId, privateKey } = muxCredentialSchema.parse(creds);
     let token: string;
@@ -74,6 +142,13 @@ export async function resolvePlayback(
         keySecret: privateKey,
         expiration: `${MUX_TTL_SECONDS}s`,
         type: 'video',
+        // Mux instant clipping: with a signed playback id the clip must be a
+        // claim, and the token overrides any URL parameter, so the viewer
+        // cannot widen it. Segment-accurate, so the stream may run a few
+        // seconds past the cap; the player stops at the cap exactly.
+        ...(previewSeconds === undefined
+          ? {}
+          : { params: { asset_end_time: String(previewSeconds) } }),
       });
     } catch (error) {
       // Signing is local, so this only fails when the stored key itself is
@@ -136,6 +211,19 @@ export async function resolvePlayback(
       ...(captionsLookup?.status === 'pending'
         ? { captionsPending: true as const }
         : {}),
+      ...(previewSeconds === undefined
+        ? {}
+        : {
+            preview: {
+              seconds: previewSeconds,
+              fullDurationSeconds: await readMuxFullDuration(
+                ref,
+                keyId,
+                privateKey,
+                options.fetchImpl,
+              ),
+            },
+          }),
     };
   }
 
@@ -168,6 +256,9 @@ export async function resolvePlayback(
     // `captions` may be absent outright, not just null-valued — see the field's
     // note in types.ts. Absent means no subtitles, which is what null encodes.
     captions: details.captions?.vtt ? { vtt: details.captions.vtt } : null,
+    ...(previewSeconds === undefined
+      ? {}
+      : { preview: { seconds: previewSeconds, fullDurationSeconds: null } }),
   };
 }
 
