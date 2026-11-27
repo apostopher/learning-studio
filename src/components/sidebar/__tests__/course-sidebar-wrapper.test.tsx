@@ -625,6 +625,38 @@ describe('CourseSidebarWrapper', () => {
       });
     });
 
+    it('shows a pilot with no level the 3D modules read only, under how to get them', async () => {
+      levelMock.mockReturnValue({
+        data: { level: null, pendingChange: null },
+        isError: false,
+      });
+      await renderAt('/', ready, 'itps');
+      // Their own module is open to them as usual.
+      expect(screen.getByRole('button', { name: /UAS General/ })).toBeDefined();
+      const group = screen.getByRole('button', { name: /3D Airmanship/ });
+      expect(group.textContent).toContain('not open to you yet');
+      fireEvent.click(group);
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            'Contact your supervisor if you want to get 3D certified.',
+          ),
+        ).toBeDefined();
+      });
+      const locked = screen.getByRole('list', {
+        name: '3D Airmanship modules, not open to you yet',
+      });
+      expect(
+        within(locked)
+          .getAllByRole('listitem')
+          .map((li) => li.textContent),
+      ).toEqual(['01Intro & Bkgnd', '02Fit-To-Fly']);
+      // Names only: nothing in it opens a module or a lesson.
+      expect(within(locked).queryAllByRole('button')).toEqual([]);
+      expect(within(locked).queryAllByRole('link')).toEqual([]);
+      expect(screen.queryByText('FIT-2')).toBeNull();
+    });
+
     it('does not group the modules of the 3D Airmanship course itself', async () => {
       await renderAt('/', {
         ...ready,

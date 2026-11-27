@@ -1,5 +1,5 @@
 import { Collapsible } from '@base-ui/react/collapsible';
-import { ChevronDown, Layers } from 'lucide-react';
+import { ChevronDown, Layers, Lock } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { inlineDirSign } from '#/lib/inline-direction';
@@ -12,7 +12,8 @@ import {
 
 type ModuleGroupProps = {
   label: string;
-  percent: number;
+  /** Null when the group is closed to this pilot: a padlock, not a ring. */
+  percent: number | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The grouped modules' own accordion. */
@@ -40,12 +41,19 @@ export const ModuleGroup = ({
     <Collapsible.Trigger className={MODULE_TRIGGER_CLASSES}>
       <Layers className="size-4 shrink-0 text-tertiary" aria-hidden="true" />
       <span className="flex-1 min-w-0 truncate">{label}</span>
-      <CircularProgress
-        value={percent}
-        size={24}
-        strokeWidth={8}
-        ariaLabel={`${label} progress`}
-      />
+      {percent === null ? (
+        <>
+          <Lock className="size-4 shrink-0 text-tertiary" aria-hidden="true" />
+          <span className="sr-only">, not open to you yet</span>
+        </>
+      ) : (
+        <CircularProgress
+          value={percent}
+          size={24}
+          strokeWidth={8}
+          ariaLabel={`${label} progress`}
+        />
+      )}
       <motion.span
         className="sidebar-chevron shrink-0 inline-flex"
         // Same rotation as a module row's chevron — see ModuleItem.

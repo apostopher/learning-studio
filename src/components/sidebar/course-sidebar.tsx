@@ -11,6 +11,7 @@ import { ArchivedLessonsSection } from './archived-lessons-section';
 import type { ArchivedLesson } from './compute-archived-lessons';
 import type { LessonRing } from './compute-lesson-ring';
 import { CourseSidebarHeader } from './course-sidebar-header';
+import { LockedModulePreview } from './locked-module-preview';
 import { ModuleAccordion } from './module-accordion';
 import { ModuleGroup } from './module-group';
 import {
@@ -64,6 +65,11 @@ type CourseSidebarProps = {
     percent: number;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /**
+     * Set when the pilot may open none of them (no level): the modules show
+     * read only and faded under this note, and the ring becomes a padlock.
+     */
+    lockedNote?: string;
   };
 };
 
@@ -171,21 +177,30 @@ export const CourseSidebar = ({
                   >
                     <ModuleGroup
                       label={flagshipGroup.label}
-                      percent={flagshipGroup.percent}
+                      percent={
+                        flagshipGroup.lockedNote ? null : flagshipGroup.percent
+                      }
                       open={flagshipGroup.open}
                       onOpenChange={flagshipGroup.onOpenChange}
                     >
-                      <ModuleAccordion
-                        courseSlug={courseSlug}
-                        modules={flagshipGroup.modules}
-                        openModuleSlug={openModuleSlug}
-                        onOpenChange={onOpenChange}
-                        activeLessonSlug={activeLessonSlug}
-                        lessonPercents={lessonPercents ?? {}}
-                        modulePercents={modulePercents ?? {}}
-                        lessonLocks={lessonLocks ?? {}}
-                        lessonRings={lessonRings}
-                      />
+                      {flagshipGroup.lockedNote ? (
+                        <LockedModulePreview
+                          modules={flagshipGroup.modules}
+                          note={flagshipGroup.lockedNote}
+                        />
+                      ) : (
+                        <ModuleAccordion
+                          courseSlug={courseSlug}
+                          modules={flagshipGroup.modules}
+                          openModuleSlug={openModuleSlug}
+                          onOpenChange={onOpenChange}
+                          activeLessonSlug={activeLessonSlug}
+                          lessonPercents={lessonPercents ?? {}}
+                          modulePercents={modulePercents ?? {}}
+                          lessonLocks={lessonLocks ?? {}}
+                          lessonRings={lessonRings}
+                        />
+                      )}
                     </ModuleGroup>
                   </MotionConfig>
                 ) : null}

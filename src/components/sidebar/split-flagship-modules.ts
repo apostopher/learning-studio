@@ -3,6 +3,10 @@ import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 /** What the student sidebar heads the 3D Airmanship group with. */
 export const FLAGSHIP_GROUP_LABEL = '3D Airmanship';
 
+/** What a pilot with no level reads over the group's faded modules. */
+export const FLAGSHIP_LOCKED_NOTE =
+  'Contact your supervisor if you want to get 3D certified.';
+
 type SplittableModule = {
   lessons: readonly { levelGated?: boolean }[];
 };

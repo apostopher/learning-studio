@@ -24,6 +24,7 @@ import {
 import { CourseSidebar } from './course-sidebar';
 import {
   FLAGSHIP_GROUP_LABEL,
+  FLAGSHIP_LOCKED_NOTE,
   flagshipGroupPercent,
   splitFlagshipModules,
 } from './split-flagship-modules';
@@ -38,7 +39,12 @@ const sidebarTickAtom = atom(0);
 /** Flips true once the client has mounted; see `mounted` in the container. */
 const sidebarMountedAtom = atom(false);
 
-type LessonLike = { slug: string; name: string; levelGated?: boolean };
+type LessonLike = {
+  slug: string;
+  name: string;
+  levelGated?: boolean;
+  isAvailable?: boolean;
+};
 type ModuleLike = {
   id: number;
   slug: string;
@@ -220,13 +226,31 @@ export const CourseSidebarWrapper = ({
     // The 3D Airmanship modules go last, under one heading; the counts above
     // still cover every module.
     const { own, flagship } = splitFlagshipModules(modules, courseSlug);
+    // A pilot with no level sees none of the 3D Airmanship lessons, so the
+    // filtered tree has no such modules. The group still shows them, read
+    // only, with how to get them — taken from the UNFILTERED course, names
+    // only (user, 2026-11-27). Never for an author, whose tree is unfiltered.
+    const noLevel = !viewingAsAuthor && levelQuery.data?.level === null;
+    const lockedFlagship =
+      noLevel && detailsQuery.data
+        ? splitFlagshipModules(
+            (detailsQuery.data.modules as unknown as readonly ModuleLike[]).map(
+              (mod) => ({
+                ...mod,
+                lessons: mod.lessons.filter((l) => l.isAvailable !== false),
+              }),
+            ),
+            courseSlug,
+          ).flagship
+        : [];
     return {
       status: 'ready' as const,
       title: data.name,
       moduleCount,
       lessonCount,
       modules: own,
-      flagshipModules: flagship,
+      flagshipModules: noLevel ? lockedFlagship : flagship,
+      flagshipLocked: noLevel && lockedFlagship.length > 0,
       emptyReason,
     };
   }, [
@@ -280,6 +304,7 @@ export const CourseSidebarWrapper = ({
         percent: flagshipGroupPercent(derived.flagshipModules, lessonPercents),
         open: flagshipGroupOpen,
         onOpenChange: setFlagshipGroupOpen,
+        lockedNote: derived.flagshipLocked ? FLAGSHIP_LOCKED_NOTE : undefined,
       }}
       archivedLessons={archivedLessons}
       archiveSectionOpen={archiveSectionOpen}
