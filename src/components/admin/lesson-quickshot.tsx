@@ -95,8 +95,7 @@ const QuickshotToggle = ({
  * No level chip: a lesson's levels belong to its discipline and are set on
  * the library's Update levels board, not per course.
  *
- * Only what the lesson asks **of the learner** lives here. Who may see it —
- * paid or free — is the padlock on the card itself (`LessonCard` `access`).
+ * Only what the lesson asks **of the learner** lives here.
  *
  * **The colour system carries meaning, so don't pick tones by taste:**
  * - *success* (green) — demands something of the learner: a debrief, a watched video.

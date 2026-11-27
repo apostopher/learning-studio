@@ -295,74 +295,10 @@ describe('LessonCard', () => {
     expect(screen.queryByText('v1.0')).toBeNull();
   });
 
-  it('draws no padlock on a read-only card', () => {
+  it('draws no paid/free padlock: access is decided by the schedule', () => {
     render(<LessonCard lesson={lesson()} />);
     expect(
       screen.queryByRole('button', { name: /Make it (paid|free)/ }),
     ).toBeNull();
-  });
-
-  it('shows a paid lesson as a pressed padlock that offers to make it free', () => {
-    const onToggle = vi.fn();
-    render(
-      <LessonCard lesson={lesson()} access={{ isPaid: true, onToggle }} />,
-    );
-    const padlock = screen.getByRole('button', {
-      name: 'Paid: only subscribers see this lesson. Make it free',
-    });
-    // State is announced, not carried by the icon alone.
-    expect(padlock.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(padlock);
-    expect(onToggle).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows a free lesson as an unpressed padlock', () => {
-    render(
-      <LessonCard
-        lesson={lesson()}
-        access={{ isPaid: false, onToggle: vi.fn() }}
-      />,
-    );
-    expect(
-      screen
-        .getByRole('button', {
-          name: 'Free: anyone enrolled sees this lesson. Make it paid',
-        })
-        .getAttribute('aria-pressed'),
-    ).toBe('false');
-  });
-
-  it('keeps a locked padlock in place, inert, wearing its reason', () => {
-    const onToggle = vi.fn();
-    render(
-      <LessonCard
-        lesson={lesson()}
-        access={{
-          isPaid: false,
-          onToggle,
-          lockedReason: 'This module is free',
-        }}
-      />,
-    );
-    const padlock = screen.getByRole('button', { name: 'This module is free' });
-    expect(padlock.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(padlock);
-    expect(onToggle).not.toHaveBeenCalled();
-  });
-
-  it('goes inert while the access change is saving', () => {
-    const onToggle = vi.fn();
-    render(
-      <LessonCard
-        lesson={lesson()}
-        access={{ isPaid: false, onToggle, isPending: true }}
-      />,
-    );
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Updating access to Crosswind landings…',
-      }),
-    );
-    expect(onToggle).not.toHaveBeenCalled();
   });
 });

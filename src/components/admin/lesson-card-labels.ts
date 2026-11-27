@@ -1,17 +1,6 @@
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported (for real, not mocked) by the drag-rules test.
 
-import {
-  accessSubscriptions,
-  isSubscriptionDisabled,
-} from '#/components/admin/lesson-config/config-mappings';
-import type {
-  EditorBoardLesson,
-  EditorBoardModule,
-  UpdateLessonConfigInput,
-} from '#/lib/admin-schemas';
-import type { LessonCardAccess } from './lesson-card';
-
 /**
  * The accessible name and tooltip of a placed lesson's "remove" control.
  *
@@ -46,36 +35,4 @@ export function visibilityLabel(isVisible: boolean, sharedWith = 0): string {
   return isVisible
     ? `Visible to students. Hide it${also}`
     : `Hidden from students. Show it${also}`;
-}
-
-/**
- * The padlock's props for a placed lesson: paid when it requires any
- * subscription, locked open when its module is free.
- *
- * Shared by both boards' card containers so the rule lives once. Making a
- * lesson paid copies its module's subscriptions (`accessSubscriptions`); a
- * free module has none to copy, so the toggle there would write `[]` back and
- * appear to do nothing — it is inert and says why instead.
- */
-export function lessonAccess(
-  lesson: Pick<EditorBoardLesson, 'requiredSubscriptions'>,
-  module: EditorBoardModule,
-  save: (patch: Pick<UpdateLessonConfigInput, 'requiredSubscriptions'>) => void,
-  isPending: boolean,
-): LessonCardAccess {
-  const isPaid = lesson.requiredSubscriptions.length > 0;
-  return {
-    isPaid,
-    isPending,
-    lockedReason: isSubscriptionDisabled(module)
-      ? 'This module is free, so its lessons cannot be paid. Set the module’s access first.'
-      : undefined,
-    onToggle: () =>
-      save({
-        requiredSubscriptions: accessSubscriptions(
-          isPaid ? 'free' : 'subscription',
-          module,
-        ),
-      }),
-  };
 }

@@ -5,13 +5,12 @@ import { toast } from 'sonner';
 import { playLessonAtom } from '#/atoms/admin';
 import { useSetLessonVisibility } from '#/data-hooks/use-set-lesson-visibility';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
-import { useUpdateEditorLessonConfig } from '#/data-hooks/use-update-editor-lesson-config';
 import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { EditorLessonQuickshotContainer } from './editor-lesson-quickshot-container';
 import { LessonCard } from './lesson-card';
-import { lessonAccess, removeLessonLabel } from './lesson-card-labels';
+import { removeLessonLabel } from './lesson-card-labels';
 
 /**
  * A lesson already placed in a module, made sortable inside the editor's
@@ -28,7 +27,7 @@ import { lessonAccess, removeLessonLabel } from './lesson-card-labels';
  * version chip says when it differs.
  *
  * Otherwise this card is the SAME card the per-course board draws — poster,
- * play tile, eye, padlock, quickshot and version chips — down to sharing
+ * play tile, eye, quickshot and version chips — down to sharing
  * `LessonCard` and `LessonQuickshot`. The remove control is the one thing it
  * adds, because a placement is only undone here. Two boards showing the same
  * lesson two different ways was the thing to fix, not a difference worth
@@ -44,8 +43,8 @@ export const EditorLessonCardContainer = ({
 }: {
   lesson: EditorBoardLesson;
   /**
-   * The whole module, not just its id and name: the padlock depends on what
-   * the module allows, and dnd needs the id. Mirrors
+   * The whole module, not just its id and name: the eye names the courses
+   * sharing it, and dnd needs the id. Mirrors
    * `SortableLessonCard`, which takes it for the same reason.
    */
   module: EditorBoardModule;
@@ -79,9 +78,6 @@ export const EditorLessonCardContainer = ({
   const unlinkLesson = useUnlinkLesson();
   const setPlayLesson = useSetAtom(playLessonAtom);
   const setVisibility = useSetLessonVisibility();
-  // The same save the quickshot chips use, so the padlock and the chips share
-  // one optimistic cache write and one rollback path.
-  const updateConfig = useUpdateEditorLessonConfig();
 
   return (
     <div
@@ -119,12 +115,6 @@ export const EditorLessonCardContainer = ({
             ),
           isPending: unlinkLesson.isPending,
         }}
-        access={lessonAccess(
-          lesson,
-          mod,
-          (patch) => updateConfig.mutate({ lessonId: lesson.id, patch }),
-          updateConfig.isPending,
-        )}
         // With the column's course: the rail shows several courses and the
         // same lesson may sit in two of them, and the preview resolves
         // playback for the lesson IN one named course.

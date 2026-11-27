@@ -1,24 +1,10 @@
-import { Toggle } from '@base-ui/react/toggle';
-import { Tooltip } from '@base-ui/react/tooltip';
-import {
-  CircleMinus,
-  Eye,
-  EyeOff,
-  GripVertical,
-  Lock,
-  LockOpen,
-  Pencil,
-} from 'lucide-react';
+import { CircleMinus, Eye, EyeOff, GripVertical, Pencil } from 'lucide-react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { ClampedText } from '../clamped-text';
 import { Chip } from '../ui/chip';
-import {
-  IconButtonTooltip,
-  iconButtonClass,
-  TooltipIconButton,
-} from '../ui/tooltip-icon-button';
+import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { visibilityLabel } from './lesson-card-labels';
 import { LessonVideoTile } from './lesson-video-tile';
 import { VersionChip, type VersionChipProps } from './version-chip';
@@ -37,25 +23,12 @@ export type LessonCardLesson = Pick<
   'name' | 'isAvailable' | 'isConfigured'
 >;
 
-export type LessonCardAccess = {
-  isPaid: boolean;
-  onToggle: () => void;
-  /** Save in flight: the padlock goes inert and says so. */
-  isPending?: boolean;
-  /**
-   * Why access cannot be changed here, when it cannot (a free module holds
-   * only free lessons). The padlock stays, inert, wearing this as its name.
-   */
-  lockedReason?: string;
-};
-
 export const LessonCard = ({
   lesson,
   posterUrl,
   dragHandleProps,
   onConfigure,
   remove,
-  access,
   onPlay,
   quickshotSlot,
   version,
@@ -87,13 +60,6 @@ export const LessonCard = ({
     /** Removal in flight: the control goes inert and says so. */
     isPending?: boolean;
   };
-  /**
-   * Paid or free, as a padlock toggle: locked (pressed) = paid, open = free.
-   * Replaced the FREE chip and took the bin's slot — deleting a lesson
-   * happens only from the library, where the whole lesson lives. Omitted on
-   * read-only cards (drag overlay, borrowed lists).
-   */
-  access?: LessonCardAccess;
   /** Opens the preview modal. Omitted where there is nowhere to open it. */
   onPlay?: () => void;
   /**
@@ -147,8 +113,7 @@ export const LessonCard = ({
       />
       {/* The tile spans both rows; everything else stacks beside it.
           A grid, not a column: the grip gets its own trailing column so the
-          action icons and the chip row both end at the same edge — the
-          padlock's — and line up without a magic offset. */}
+          action icons and the chip row both end at the same edge and line up without a magic offset. */}
       <div
         className={cn(
           'grid min-w-0 flex-1 gap-y-1.5',
@@ -214,7 +179,6 @@ export const LessonCard = ({
               <CircleMinus className="h-4 w-4" aria-hidden="true" />
             </TooltipIconButton>
           )}
-          {access && <AccessToggle lessonName={lesson.name} access={access} />}
         </div>
         {/* A card with no drag handle is read-only (e.g. a borrowed
             module's `BorrowedLessonList`) — a grip that does nothing
@@ -235,9 +199,9 @@ export const LessonCard = ({
           </Chip>
         )}
         {(quickshotSlot || version) && (
-          // Right-aligned so the last chip ends under the padlock. `pe-1.5`
+          // Right-aligned so the last chip ends under the last icon. `pe-1.5`
           // is the icon button's own inset ((28px box − 16px glyph) / 2), so
-          // the chip lines up with the padlock you see, not its hit area.
+          // the chip lines up with the icon you see, not its hit area.
           <div className="col-start-1 flex flex-wrap items-center justify-end gap-1.5 pe-1.5">
             {quickshotSlot}
             {version && <VersionChip {...version} />}
@@ -245,58 +209,5 @@ export const LessonCard = ({
         )}
       </div>
     </div>
-  );
-};
-
-/**
- * The paid/free padlock. A real toggle (`aria-pressed`, pressed = paid)
- * rather than a TooltipIconButton, so its state is announced, not just drawn.
- *
- * Like the eye, the icon shows the CURRENT state and the name says what a
- * click will do. The closed lock is tinted `warning-text` because brown is
- * this board's colour for "narrows who may see the lesson"; the open lock is
- * the resting state and stays neutral.
- *
- * `aria-disabled` rather than `disabled`, and no handler when inert: Base
- * UI's Tooltip.Trigger swallows the native attribute so the tooltip can still
- * say why — see `tooltip-icon-button.tsx`.
- */
-const AccessToggle = ({
-  lessonName,
-  access,
-}: {
-  lessonName: string;
-  access: LessonCardAccess;
-}) => {
-  const inert = Boolean(access.isPending || access.lockedReason);
-  const label = access.isPending
-    ? `Updating access to ${lessonName}…`
-    : (access.lockedReason ??
-      (access.isPaid
-        ? 'Paid: only subscribers see this lesson. Make it free'
-        : 'Free: anyone enrolled sees this lesson. Make it paid'));
-  return (
-    // Closes as soon as the pointer leaves — see `tooltip-icon-button.tsx`.
-    <Tooltip.Root disableHoverablePopup>
-      <Tooltip.Trigger
-        aria-disabled={inert || undefined}
-        aria-label={label}
-        render={
-          <Toggle
-            pressed={access.isPaid}
-            onPressedChange={inert ? undefined : () => access.onToggle()}
-            render={<button type="button" />}
-          />
-        }
-        className={iconButtonClass()}
-      >
-        {access.isPaid ? (
-          <Lock className="h-4 w-4 text-warning-text" aria-hidden="true" />
-        ) : (
-          <LockOpen className="h-4 w-4" aria-hidden="true" />
-        )}
-      </Tooltip.Trigger>
-      <IconButtonTooltip label={label} />
-    </Tooltip.Root>
   );
 };
