@@ -27,7 +27,7 @@ type ModuleItemProps = {
   lessonRings?: Record<string, LessonRing>;
 };
 
-const TRIGGER_CLASSES = [
+export const MODULE_TRIGGER_CLASSES = [
   'sidebar-focus-ring',
   'flex items-center gap-2 w-full',
   'px-sidebar-row-inline py-sidebar-row-block',
@@ -36,7 +36,7 @@ const TRIGGER_CLASSES = [
   'hover:bg-gray-a3',
 ].join(' ');
 
-const PANEL_VARIANTS = {
+export const MODULE_PANEL_VARIANTS = {
   open: {
     height: 'auto',
     maskImage: 'linear-gradient(to bottom, black 100%, transparent 100%)',
@@ -47,7 +47,7 @@ const PANEL_VARIANTS = {
   },
 } as const;
 
-const CONTENT_VARIANTS = {
+export const MODULE_CONTENT_VARIANTS = {
   open: { filter: 'blur(0px)', opacity: 1 },
   closed: { filter: 'blur(2px)', opacity: 0 },
 } as const;
@@ -65,7 +65,7 @@ export const ModuleItem = ({
 }: ModuleItemProps) => (
   <Accordion.Item value={module.slug} className="flex flex-col">
     <Accordion.Header>
-      <Accordion.Trigger className={TRIGGER_CLASSES}>
+      <Accordion.Trigger className={MODULE_TRIGGER_CLASSES}>
         <span className="tabular-nums text-tertiary text-xs font-medium shrink-0">
           {String(rank).padStart(2, '0')}
         </span>
@@ -94,12 +94,12 @@ export const ModuleItem = ({
       <AnimatePresence initial={false}>
         {isOpen ? (
           <motion.div
-            variants={PANEL_VARIANTS}
+            variants={MODULE_PANEL_VARIANTS}
             initial="closed"
             animate="open"
             exit="closed"
           >
-            <motion.div variants={CONTENT_VARIANTS}>
+            <motion.div variants={MODULE_CONTENT_VARIANTS}>
               <LessonList
                 courseSlug={courseSlug}
                 moduleSlug={module.slug}

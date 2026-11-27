@@ -12,6 +12,7 @@ import {
 } from '#/lib/level-visibility';
 import {
   archiveSectionOpenAtom,
+  flagshipGroupOpenAtom,
   openModuleSlugAtom,
 } from '../../atoms/sidebar';
 import { computeArchivedLessons } from './compute-archived-lessons';
@@ -21,6 +22,11 @@ import {
   earliestRefreshAt,
 } from './compute-sidebar-percents';
 import { CourseSidebar } from './course-sidebar';
+import {
+  FLAGSHIP_GROUP_LABEL,
+  flagshipGroupPercent,
+  splitFlagshipModules,
+} from './split-flagship-modules';
 
 /**
  * Bumped by the refresh timer to recompute the rings against a fresh clock.
@@ -32,7 +38,7 @@ const sidebarTickAtom = atom(0);
 /** Flips true once the client has mounted; see `mounted` in the container. */
 const sidebarMountedAtom = atom(false);
 
-type LessonLike = { slug: string; name: string };
+type LessonLike = { slug: string; name: string; levelGated?: boolean };
 type ModuleLike = {
   id: number;
   slug: string;
@@ -65,6 +71,9 @@ export const CourseSidebarWrapper = ({
   const [openModuleSlug, setOpenModuleSlug] = useAtom(openModuleSlugAtom);
   const [archiveSectionOpen, setArchiveSectionOpen] = useAtom(
     archiveSectionOpenAtom,
+  );
+  const [flagshipGroupOpen, setFlagshipGroupOpen] = useAtom(
+    flagshipGroupOpenAtom,
   );
 
   // Filter to what this pilot's level may see, before anything downstream
@@ -208,12 +217,16 @@ export const CourseSidebarWrapper = ({
           : courseHasLessons
             ? ('no-lessons-at-level' as const)
             : null;
+    // The 3D Airmanship modules go last, under one heading; the counts above
+    // still cover every module.
+    const { own, flagship } = splitFlagshipModules(modules, courseSlug);
     return {
       status: 'ready' as const,
       title: data.name,
       moduleCount,
       lessonCount,
-      modules,
+      modules: own,
+      flagshipModules: flagship,
       emptyReason,
     };
   }, [
@@ -224,6 +237,7 @@ export const CourseSidebarWrapper = ({
     levelQuery.data,
     viewingAsAuthor,
     detailsQuery.data,
+    courseSlug,
   ]);
 
   if (derived.status === 'loading' || derived.status === 'error') {
@@ -260,6 +274,13 @@ export const CourseSidebarWrapper = ({
           : LEVEL_LABELS[levelQuery.data.level]
       }
       emptyReason={derived.emptyReason}
+      flagshipGroup={{
+        label: FLAGSHIP_GROUP_LABEL,
+        modules: derived.flagshipModules,
+        percent: flagshipGroupPercent(derived.flagshipModules, lessonPercents),
+        open: flagshipGroupOpen,
+        onOpenChange: setFlagshipGroupOpen,
+      }}
       archivedLessons={archivedLessons}
       archiveSectionOpen={archiveSectionOpen}
       onArchiveSectionOpenChange={setArchiveSectionOpen}

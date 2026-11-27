@@ -9,3 +9,9 @@ export const openModuleSlugAtom = atom<string | null>(null);
  * `openModuleSlugAtom` for the module accordion.
  */
 export const archiveSectionOpenAtom = atom(false);
+
+/**
+ * Whether the student sidebar's 3D Airmanship group is open. Closed by
+ * default, like the modules inside it.
+ */
+export const flagshipGroupOpenAtom = atom(false);

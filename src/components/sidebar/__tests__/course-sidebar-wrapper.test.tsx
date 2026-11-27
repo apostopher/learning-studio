@@ -191,7 +191,11 @@ const leveledCourse = {
   ],
 };
 
-async function renderAt(path: string, details: DetailsResult) {
+async function renderAt(
+  path: string,
+  details: DetailsResult,
+  courseSlug = '3d-airmanship',
+) {
   const store = createStore();
   store.set(detailsAtom, details);
 
@@ -201,12 +205,12 @@ async function renderAt(path: string, details: DetailsResult) {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <CourseSidebarWrapper courseSlug="3d-airmanship" />,
+    component: () => <CourseSidebarWrapper courseSlug={courseSlug} />,
   });
   const lessonRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/course/$courseSlug/modules/$moduleSlug/lessons/$lessonSlug',
-    component: () => <CourseSidebarWrapper courseSlug="3d-airmanship" />,
+    component: () => <CourseSidebarWrapper courseSlug={courseSlug} />,
   });
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute, lessonRoute]),
@@ -535,6 +539,88 @@ describe('CourseSidebarWrapper', () => {
       ),
     ).toBeDefined();
     expect(screen.queryByText('Fundamentals')).toBeNull();
+  });
+
+  describe('3D Airmanship group', () => {
+    const lesson = (slug: string, levelGated: boolean) => ({
+      id: slug.length,
+      slug,
+      name: slug.toUpperCase(),
+      hasVideo: false,
+      isAvailable: true,
+      levels: ['basic'],
+      levelGated,
+    });
+    const mixedCourse = {
+      id: 9,
+      slug: 'itps',
+      name: 'ITPS',
+      modules: [
+        {
+          id: 1,
+          slug: 'intro',
+          name: 'Intro & Bkgnd',
+          lessons: [lesson('intro-1', true)],
+        },
+        {
+          id: 2,
+          slug: 'uas',
+          name: 'UAS General',
+          lessons: [lesson('uas-1', false)],
+        },
+        {
+          id: 3,
+          slug: 'fit',
+          name: 'Fit-To-Fly',
+          lessons: [lesson('fit-1', true), lesson('fit-2', true)],
+        },
+      ],
+    };
+    const ready = { data: mixedCourse, isLoading: false, isError: false };
+
+    it('gathers the 3D Airmanship modules under one accordion, last in the list', async () => {
+      await renderAt('/', ready, 'itps');
+      const nav = screen.getByRole('navigation', { name: 'Course contents' });
+      const rows = within(nav)
+        .getAllByRole('button')
+        .map((b) => b.textContent ?? '');
+      expect(rows.map((r) => r.replace(/\d+%$/, '').trim())).toEqual([
+        '01UAS General',
+        '3D Airmanship',
+      ]);
+      // The header still counts every module.
+      expect(screen.getByText('3 modules · 4 lessons')).toBeDefined();
+    });
+
+    it('opens the group to its modules, and a module to its lessons', async () => {
+      await renderAt('/', ready, 'itps');
+      fireEvent.click(screen.getByRole('button', { name: /3D Airmanship/ }));
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: /Fit-To-Fly/ }),
+        ).toBeDefined();
+      });
+      expect(
+        screen.getByRole('button', { name: /Intro & Bkgnd/ }),
+      ).toBeDefined();
+      fireEvent.click(screen.getByRole('button', { name: /Fit-To-Fly/ }));
+      await waitFor(() => {
+        expect(screen.getByRole('link', { name: /FIT-2/ })).toBeDefined();
+      });
+    });
+
+    it('does not group the modules of the 3D Airmanship course itself', async () => {
+      await renderAt('/', {
+        ...ready,
+        data: { ...mixedCourse, slug: '3d-airmanship' },
+      });
+      expect(
+        screen.queryByRole('button', { name: /^3D Airmanship/ }),
+      ).toBeNull();
+      expect(
+        screen.getByRole('button', { name: /Intro & Bkgnd/ }),
+      ).toBeDefined();
+    });
   });
 
   it('lists the lessons outside 3D Airmanship for a pilot with no level', async () => {

@@ -1,4 +1,9 @@
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import {
+  AnimatePresence,
+  MotionConfig,
+  motion,
+  useReducedMotion,
+} from 'motion/react';
 import type { LessonLock } from '#/lib/lesson-gating';
 import { readSidebarMotionTokens } from '../../lib/sidebar-motion';
 import { ArchivedLessonsSection } from './archived-lessons-section';
@@ -6,6 +11,7 @@ import type { ArchivedLesson } from './compute-archived-lessons';
 import type { LessonRing } from './compute-lesson-ring';
 import { CourseSidebarHeader } from './course-sidebar-header';
 import { ModuleAccordion } from './module-accordion';
+import { ModuleGroup } from './module-group';
 import {
   SidebarEmptyLevel,
   type SidebarEmptyLevelReason,
@@ -47,6 +53,17 @@ type CourseSidebarProps = {
    * no lessons at it) — the message replaces the empty module list.
    */
   emptyReason?: SidebarEmptyLevelReason | null;
+  /**
+   * The 3D Airmanship modules, drawn last under one `flagshipGroup.label`
+   * accordion instead of among `modules`. Absent or empty: no group.
+   */
+  flagshipGroup?: {
+    label: string;
+    modules: readonly ModuleLike[];
+    percent: number;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  };
 };
 
 const STAGE_CLASSES = 'flex flex-col gap-sidebar-section-gap min-h-0';
@@ -71,6 +88,7 @@ export const CourseSidebar = ({
   archiveSectionOpen,
   onArchiveSectionOpenChange,
   emptyReason,
+  flagshipGroup,
 }: CourseSidebarProps) => {
   const reduced = useReducedMotion();
   const tokens = readSidebarMotionTokens();
@@ -123,17 +141,48 @@ export const CourseSidebar = ({
             {emptyReason ? (
               <SidebarEmptyLevel reason={emptyReason} />
             ) : (
-              <ModuleAccordion
-                courseSlug={courseSlug}
-                modules={modules ?? []}
-                openModuleSlug={openModuleSlug}
-                onOpenChange={onOpenChange}
-                activeLessonSlug={activeLessonSlug}
-                lessonPercents={lessonPercents ?? {}}
-                modulePercents={modulePercents ?? {}}
-                lessonLocks={lessonLocks ?? {}}
-                lessonRings={lessonRings}
-              />
+              <div className="flex flex-col gap-sidebar-row-gap">
+                <ModuleAccordion
+                  courseSlug={courseSlug}
+                  modules={modules ?? []}
+                  openModuleSlug={openModuleSlug}
+                  onOpenChange={onOpenChange}
+                  activeLessonSlug={activeLessonSlug}
+                  lessonPercents={lessonPercents ?? {}}
+                  modulePercents={modulePercents ?? {}}
+                  lessonLocks={lessonLocks ?? {}}
+                  lessonRings={lessonRings}
+                />
+                {flagshipGroup && flagshipGroup.modules.length > 0 ? (
+                  <MotionConfig
+                    reducedMotion="user"
+                    transition={{
+                      type: 'spring',
+                      bounce: 0.2,
+                      visualDuration: 0.4,
+                    }}
+                  >
+                    <ModuleGroup
+                      label={flagshipGroup.label}
+                      percent={flagshipGroup.percent}
+                      open={flagshipGroup.open}
+                      onOpenChange={flagshipGroup.onOpenChange}
+                    >
+                      <ModuleAccordion
+                        courseSlug={courseSlug}
+                        modules={flagshipGroup.modules}
+                        openModuleSlug={openModuleSlug}
+                        onOpenChange={onOpenChange}
+                        activeLessonSlug={activeLessonSlug}
+                        lessonPercents={lessonPercents ?? {}}
+                        modulePercents={modulePercents ?? {}}
+                        lessonLocks={lessonLocks ?? {}}
+                        lessonRings={lessonRings}
+                      />
+                    </ModuleGroup>
+                  </MotionConfig>
+                ) : null}
+              </div>
             )}
             <ArchivedLessonsSection
               courseSlug={courseSlug}
