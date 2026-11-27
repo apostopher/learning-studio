@@ -104,7 +104,8 @@ export type VideoPlayerProps = Omit<
    */
   kind?: 'hls' | 'file';
   videoRef: React.Ref<HTMLVideoElement>;
-  rootRef?: React.Ref<HTMLDivElement>;
+  /** The root element; also where the speed and language menus mount. */
+  rootRef?: React.RefObject<HTMLDivElement | null>;
   captions?: VideoCaption[];
   state?: Partial<VideoPlayerState>;
   actions?: VideoPlayerActions;

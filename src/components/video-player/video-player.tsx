@@ -210,6 +210,7 @@ export const VideoPlayer = ({
               active={activeLanguage ?? languages[0].code}
               label={labels.language}
               onChange={a.onLanguageChange}
+              container={rootRef}
             />
           ) : null}
           {a.onPlaybackRateChange ? (
@@ -218,6 +219,7 @@ export const VideoPlayer = ({
               rates={playbackRates}
               label={labels.playbackRate}
               onChange={a.onPlaybackRateChange}
+              container={rootRef}
             />
           ) : null}
           {hasCaptions && a.onCaptionsToggle ? (

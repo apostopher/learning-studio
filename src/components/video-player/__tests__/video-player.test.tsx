@@ -246,6 +246,41 @@ describe('VideoPlayer', () => {
     expect(onLanguageChange).toHaveBeenCalledWith('fr-CA');
   });
 
+  it('opens the speed and language menus inside the player, so they show over a dialog and in fullscreen', async () => {
+    // Portaled to <body>, a menu opens BEHIND the z-40 lesson dialog, and in
+    // fullscreen (where only the player's subtree is drawn) not at all.
+    const ref = createRef<HTMLVideoElement>();
+    const rootRef = createRef<HTMLDivElement>();
+    const onPlaybackRateChange = vi.fn();
+    render(
+      <VideoPlayer
+        {...MIN_PROPS}
+        videoRef={ref}
+        rootRef={rootRef}
+        languages={LANGS}
+        activeLanguage="en"
+        actions={{ onPlaybackRateChange, onLanguageChange: vi.fn() }}
+      />,
+    );
+    const root = screen.getByRole('region', { name: 'Video player' });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Playback rate: 1x' }),
+    );
+    const fast = await screen.findByRole('menuitem', { name: '1.5x' });
+    expect(root.contains(fast)).toBe(true);
+    await userEvent.click(fast);
+    expect(onPlaybackRateChange).toHaveBeenCalledWith(1.5);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Language: English' }),
+    );
+    const french = await screen.findByRole('menuitem', {
+      name: /Canadian French/,
+    });
+    expect(root.contains(french)).toBe(true);
+  });
+
   it('reports a caption file that fails to load', () => {
     const ref = createRef<HTMLVideoElement>();
     const onCaptionsError = vi.fn();

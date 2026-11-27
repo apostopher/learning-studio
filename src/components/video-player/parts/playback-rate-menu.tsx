@@ -6,6 +6,12 @@ type PlaybackRateMenuProps = {
   rates: number[];
   label: string;
   onChange?: (rate: number) => void;
+  /**
+   * Where the popup is mounted: the player's root. Inside it, the popup shows
+   * in fullscreen (where only the root's subtree is drawn) and above any
+   * dialog the player sits in.
+   */
+  container?: React.RefObject<HTMLDivElement | null>;
 };
 
 export const PlaybackRateMenu = ({
@@ -13,6 +19,7 @@ export const PlaybackRateMenu = ({
   rates,
   label,
   onChange,
+  container,
 }: PlaybackRateMenuProps) => (
   <Menu.Root>
     <Menu.Trigger
@@ -30,8 +37,14 @@ export const PlaybackRateMenu = ({
         {rate}x
       </span>
     </Menu.Trigger>
-    <Menu.Portal>
-      <Menu.Positioner sideOffset={8}>
+    <Menu.Portal container={container}>
+      <Menu.Positioner
+        sideOffset={8}
+        // Fixed, not absolute: the root clips its overflow, and a short
+        // preview would cut the list off.
+        positionMethod="fixed"
+        style={{ zIndex: 60 }}
+      >
         <Menu.Popup
           style={{
             background: 'var(--color-gray-1)',
