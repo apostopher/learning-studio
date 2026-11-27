@@ -2,7 +2,8 @@ import { LESSON_VERSION_NOTES_MAX } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 
 /**
- * Notes on what changed in the version above: the SME's own reference.
+ * The SME's running notes on what changed, version by version: their own
+ * reference, appended to as the version moves on.
  *
  * Custom because Base UI has no textarea part; it is styled to match the
  * Version input beside it.
@@ -27,7 +28,7 @@ export const VersionNotesField = ({
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="font-medium text-primary text-sm">
-        What changed in this version{' '}
+        Version notes{' '}
         <span className="font-normal text-secondary">(optional)</span>
       </label>
       <textarea
@@ -49,7 +50,8 @@ export const VersionNotesField = ({
         )}
       />
       <p id={hintId} className="text-secondary text-sm">
-        For your reference only. Starts empty when you change the version.
+        For your reference only. Add a line when you change the version, such as
+        “1.1 updated French video”.
       </p>
     </div>
   );

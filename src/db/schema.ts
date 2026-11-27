@@ -485,6 +485,12 @@ export const lessonsTable = pgTable(
     /** The working copy's version. Staff-only: never in a learner payload. */
     version: text('version').notNull().default(DEFAULT_LESSON_VERSION),
     /**
+     * The SME's running notes on what changed, version by version, appended
+     * to as the version moves on. Staff-only: never in a learner payload.
+     * Added by migrate-lesson-version-notes.ts, not drizzle-kit push.
+     */
+    versionNotes: text('version_notes').notNull().default(''),
+    /**
      * Last content edit; `updatedAt` also moves on config edits. Staff-only.
      * Kept up, though nothing shows it since the update dialog went
      * (2026-11-25): for telling whether a lesson was edited under its version.
@@ -889,25 +895,6 @@ export const courseLessonVisibilityTable = pgTable(
     updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.courseId, table.lessonId] })],
-);
-
-/**
- * What an SME wrote about what changed in one version of a lesson — for their
- * own reference, read by nobody else. Keyed by the version LABEL: reusing a
- * label edits its note. Created by migrate-lesson-version-notes.ts, not
- * drizzle-kit push.
- */
-export const lessonVersionNotesTable = pgTable(
-  'lesson_version_notes',
-  {
-    lessonId: integer('lesson_id')
-      .notNull()
-      .references(() => lessonsTable.id, { onDelete: 'cascade' }),
-    version: text('version').notNull(),
-    notes: text('notes').notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
-  },
-  (table) => [primaryKey({ columns: [table.lessonId, table.version] })],
 );
 
 export const lessonMaterialInsertSchema = createInsertSchema(

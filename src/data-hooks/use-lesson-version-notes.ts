@@ -5,14 +5,12 @@ import { dataKeys } from './keys';
 const url = (lessonId: number) =>
   `/api/admin/lessons/${lessonId}/version-notes`;
 
-/** The notes saved for one version of a lesson; '' when there are none. */
-export function useLessonVersionNotes(lessonId: number, version: string) {
+/** The lesson's running version notes; '' when there are none. */
+export function useLessonVersionNotes(lessonId: number) {
   return useQuery({
-    queryKey: dataKeys.lessonVersionNotes(lessonId, version),
+    queryKey: dataKeys.lessonVersionNotes(lessonId),
     queryFn: async (): Promise<string> => {
-      const res = await fetch(
-        `${url(lessonId)}?version=${encodeURIComponent(version)}`,
-      );
+      const res = await fetch(url(lessonId));
       if (!res.ok)
         throw new Error(`Could not load the version notes (${res.status})`);
       const body = (await res.json()) as { notes: string };
@@ -23,7 +21,7 @@ export function useLessonVersionNotes(lessonId: number, version: string) {
 }
 
 /**
- * Save the notes for one version. Registered under the Save button's key, so
+ * Save the lesson's version notes. Registered under the Save button's key, so
  * the button spins while they go.
  */
 export function useSaveLessonVersionNotes(lessonId: number) {
@@ -39,11 +37,8 @@ export function useSaveLessonVersionNotes(lessonId: number) {
       if (!res.ok)
         throw new Error(`Could not save the version notes (${res.status})`);
     },
-    onSuccess: (_data, { version, notes }) => {
-      queryClient.setQueryData(
-        dataKeys.lessonVersionNotes(lessonId, version),
-        notes.trim() === '' ? '' : notes,
-      );
+    onSuccess: (_data, { notes }) => {
+      queryClient.setQueryData(dataKeys.lessonVersionNotes(lessonId), notes);
     },
   });
 }

@@ -19,6 +19,7 @@ type SecretLessonFields =
   | 'videoRef'
   | 'otherVideoIds'
   | 'version'
+  | 'versionNotes'
   | 'contentUpdatedAt';
 
 function omitLessonSecrets<
@@ -29,6 +30,7 @@ function omitLessonSecrets<
     videoRef: _videoRef,
     otherVideoIds: _otherVideoIds,
     version: _version,
+    versionNotes: _versionNotes,
     contentUpdatedAt: _contentUpdatedAt,
     ...rest
   } = lesson;
@@ -61,7 +63,7 @@ function omitModuleOwner<T extends { courseId?: unknown }>(
 /**
  * Drops every video-identifying field from each lesson before the payload
  * leaves the server: `videoProvider`, `videoRef`, `otherVideoIds`. And its
- * `version` and `contentUpdatedAt`, which are for staff only.
+ * `version`, `versionNotes` and `contentUpdatedAt`, which are for staff only.
  *
  * `videoProvider`/`videoRef` matter most: this route has no zod
  * parse on the way out, only a cast, so whatever ships here lands in the

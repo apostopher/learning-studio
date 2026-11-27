@@ -18,7 +18,6 @@ import {
   useVersionGate,
   type VersionedLesson,
 } from './use-version-gate';
-import { notesDraftAfterVersionEdit } from './use-version-notes';
 import { VersionField } from './version-field';
 
 /**
@@ -35,6 +34,8 @@ export const VersionFieldContainer = ({
   const [refusal, setRefusal] = useAtom(
     lessonVersionRefusalAtomFamily(lesson.id),
   );
+  // Cleared with the version's draft below; the notes field has no effect of
+  // its own.
   const setNotesDraft = useSetAtom(
     lessonVersionNotesDraftAtomFamily(lesson.id),
   );
@@ -81,10 +82,6 @@ export const VersionFieldContainer = ({
       register={form.register('version', {
         onChange: (event) => {
           const next: string = event.target.value;
-          // A new version starts with blank notes: see the rule's doc.
-          setNotesDraft((notes) =>
-            notesDraftAfterVersionEdit(lesson.version, draft, next, notes),
-          );
           setDraft(next);
           setRefusal(null);
         },

@@ -1,5 +1,4 @@
 import { useIsSavingLessonContent } from '#/data-hooks/lesson-content-write';
-import type { VersionedLesson } from './use-version-gate';
 import { useVersionNotes } from './use-version-notes';
 import { VersionNotesField } from './version-notes-field';
 
@@ -10,9 +9,9 @@ import { VersionNotesField } from './version-notes-field';
 export const VersionNotesFieldContainer = ({
   lesson,
 }: {
-  lesson: VersionedLesson;
+  lesson: { id: number };
 }) => {
-  const notes = useVersionNotes(lesson);
+  const notes = useVersionNotes(lesson.id);
   const isSaving = useIsSavingLessonContent(lesson.id);
   return (
     <VersionNotesField

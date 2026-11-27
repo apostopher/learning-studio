@@ -221,13 +221,12 @@ export const setLessonVersionInputSchema = z
   .strict();
 export type SetLessonVersionInput = z.infer<typeof setLessonVersionInputSchema>;
 
-/** Longest version note kept: a few paragraphs, not a document. */
+/** Longest version notes kept: a running log, not a document. */
 export const LESSON_VERSION_NOTES_MAX = 4000;
 
-/** PUT body of a lesson's version notes: the notes for THIS version. */
+/** PUT body of a lesson's version notes: the whole running note. */
 export const setLessonVersionNotesInputSchema = z
   .object({
-    version: lessonVersionSchema,
     notes: z
       .string()
       .max(

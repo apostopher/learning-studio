@@ -604,8 +604,8 @@ export const lessonVersionDraftAtomFamily = atomFamily((_lessonId: number) =>
 
 /**
  * The version notes typed in a lesson's editor and not saved yet; null =
- * untouched, so the field shows the saved notes (or none, for a version just
- * typed). Keyed per lesson, like the version draft it goes with.
+ * untouched, so the field shows the saved notes. Keyed per lesson, like the
+ * version draft it goes with.
  */
 export const lessonVersionNotesDraftAtomFamily = atomFamily(
   (_lessonId: number) => atom<string | null>(null),

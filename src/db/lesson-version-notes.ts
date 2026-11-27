@@ -1,52 +1,26 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '#/db';
-import { lessonVersionNotesTable } from '#/db/schema';
+import { lessonsTable } from '#/db/schema';
 
-/** The notes written for one version of a lesson; '' when there are none. */
-export async function getLessonVersionNotes(
-  lessonId: number,
-  version: string,
-): Promise<string> {
+/** The lesson's running version notes; '' when there are none. */
+export async function getLessonVersionNotes(lessonId: number): Promise<string> {
   const [row] = await db
-    .select({ notes: lessonVersionNotesTable.notes })
-    .from(lessonVersionNotesTable)
-    .where(
-      and(
-        eq(lessonVersionNotesTable.lessonId, lessonId),
-        eq(lessonVersionNotesTable.version, version),
-      ),
-    );
+    .select({ notes: lessonsTable.versionNotes })
+    .from(lessonsTable)
+    .where(eq(lessonsTable.id, lessonId));
   return row?.notes ?? '';
 }
 
 /**
- * Writes the notes for one version, replacing any already there. Cleared
- * notes delete the row rather than keep an empty one.
+ * Replaces the lesson's version notes. Touches neither `updatedAt` nor
+ * `contentUpdatedAt`: the notes are about the lesson, not part of it.
  */
 export async function setLessonVersionNotes(
   lessonId: number,
-  version: string,
   notes: string,
 ): Promise<void> {
-  if (notes.trim() === '') {
-    await db
-      .delete(lessonVersionNotesTable)
-      .where(
-        and(
-          eq(lessonVersionNotesTable.lessonId, lessonId),
-          eq(lessonVersionNotesTable.version, version),
-        ),
-      );
-    return;
-  }
   await db
-    .insert(lessonVersionNotesTable)
-    .values({ lessonId, version, notes })
-    .onConflictDoUpdate({
-      target: [
-        lessonVersionNotesTable.lessonId,
-        lessonVersionNotesTable.version,
-      ],
-      set: { notes, updatedAt: sql`now()` },
-    });
+    .update(lessonsTable)
+    .set({ versionNotes: notes })
+    .where(eq(lessonsTable.id, lessonId));
 }

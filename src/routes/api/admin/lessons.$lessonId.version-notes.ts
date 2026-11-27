@@ -8,14 +8,13 @@ import {
 } from '#/db/lesson-version-notes';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { setLessonVersionNotesInputSchema } from '#/lib/admin-schemas';
-import { lessonVersionSchema } from '#/lib/lesson-version';
 import {
   absentResourceResponse,
   requireLessonContentPermission,
 } from '#/lib/permissions.server';
 
 /**
- * A lesson's notes for one version: what the SME wrote about what changed.
+ * A lesson's version notes: the SME's running log of what changed.
  * The same authority as the version itself — the lesson's discipline, or an
  * org admin when it has none.
  */
@@ -58,18 +57,9 @@ export async function getVersionNotesHandler(
   request: Request,
   rawLessonId: string,
 ): Promise<Response> {
-  const version = lessonVersionSchema.safeParse(
-    new URL(request.url).searchParams.get('version'),
-  );
-  if (!version.success) {
-    return Response.json(
-      { error: 'A valid version is required' },
-      { status: 400 },
-    );
-  }
   const authorized = await authorize(request, rawLessonId, 'read');
   if ('response' in authorized) return authorized.response;
-  const notes = await getLessonVersionNotes(authorized.lessonId, version.data);
+  const notes = await getLessonVersionNotes(authorized.lessonId);
   return Response.json({ notes });
 }
 
@@ -92,11 +82,7 @@ export async function putVersionNotesHandler(
   }
   const authorized = await authorize(request, rawLessonId, 'update');
   if ('response' in authorized) return authorized.response;
-  await setLessonVersionNotes(
-    authorized.lessonId,
-    input.data.version,
-    input.data.notes,
-  );
+  await setLessonVersionNotes(authorized.lessonId, input.data.notes);
   return Response.json({ notes: input.data.notes });
 }
 

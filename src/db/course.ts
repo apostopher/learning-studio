@@ -51,11 +51,14 @@ import type {
 } from '@/types';
 import { db } from '.';
 
-// `version` and `contentUpdatedAt` are staff-only and never read for this
-// payload, so they are omitted. `rank` is the PLACEMENT's (see the
+// `version`, `versionNotes` and `contentUpdatedAt` are staff-only and never
+// read for this payload, so they are omitted. `rank` is the PLACEMENT's (see the
 // `lessonMap.set(...)` below): `lessons` has no rank column. It is declared
 // here to satisfy `shapeModuleLessons`'s `ShapeableLesson` constraint.
-type LessonDetails = Omit<DBLesson, 'version' | 'contentUpdatedAt'> & {
+type LessonDetails = Omit<
+  DBLesson,
+  'version' | 'versionNotes' | 'contentUpdatedAt'
+> & {
   rank: string;
   dependsOn: CourseLessonDependencies;
   /**
@@ -162,10 +165,11 @@ export async function getCourseDetails(slug: string) {
   // should be none) is not in the payload. A pin is per (course, lesson), so
   // it adds no rows either.
   //
-  // `version` and `contentUpdatedAt` are staff-only: this payload reaches
-  // learners, so they are never read here.
+  // `version`, `versionNotes` and `contentUpdatedAt` are staff-only: this
+  // payload reaches learners, so they are never read here.
   const {
     version: _version,
+    versionNotes: _versionNotes,
     contentUpdatedAt: _contentUpdatedAt,
     ...lessonColumns
   } = getTableColumns(lessonsTable);

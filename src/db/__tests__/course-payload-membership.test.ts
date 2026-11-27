@@ -160,6 +160,7 @@ describe('getCourseDetails', () => {
       expect.arrayContaining(['id', 'slug', 'isAvailable', 'videoRef']),
     );
     expect(lesson).not.toHaveProperty('version');
+    expect(lesson).not.toHaveProperty('versionNotes');
     expect(lesson).not.toHaveProperty('contentUpdatedAt');
   });
 

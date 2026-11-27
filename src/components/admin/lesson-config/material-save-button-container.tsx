@@ -34,7 +34,7 @@ export const MaterialSaveButtonContainer = ({
   });
   const isMaterialDirty = useAtomValue(lessonMaterialDirtyAtomFamily(lessonId));
   const draft = useAtomValue(lessonVersionDraftAtomFamily(lessonId));
-  const notes = useVersionNotes({ id: lessonId, version });
+  const notes = useVersionNotes(lessonId);
   const isDirty =
     isMaterialDirty || isVersionDirty(draft, version) || notes.isDirty;
   return (

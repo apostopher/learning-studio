@@ -76,9 +76,9 @@ export const dataKeys = {
   /** The writes the Save button makes: material, or the version alone. */
   lessonSave: (lessonId: number) =>
     [...dataKeys.lessonContentWrite(lessonId), 'save'] as const,
-  /** What the SME wrote about one version of a lesson. */
-  lessonVersionNotes: (lessonId: number, version: string) =>
-    ['admin', 'lesson-version-notes', lessonId, version] as const,
+  /** The SME's running notes on a lesson's versions. */
+  lessonVersionNotes: (lessonId: number) =>
+    ['admin', 'lesson-version-notes', lessonId] as const,
   /** Which video a lesson has (provider + ref) — the dialog's prefill. */
   lessonVideo: (lessonId: number) =>
     ['admin', 'lesson-video', lessonId] as const,

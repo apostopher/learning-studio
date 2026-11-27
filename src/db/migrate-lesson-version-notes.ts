@@ -1,41 +1,48 @@
 import { sql } from 'drizzle-orm';
 
 /**
- * Adds `lesson_version_notes`: what an SME wrote about what changed in one
- * version of a lesson. One row per (lesson, version) — the version is a label
- * an author may use again, and using it again edits the same note. Empty to
- * begin with.
+ * Adds `lessons.version_notes`: one running note per lesson in which the SME
+ * keeps track of what changed, version by version ("1.0 added intro section",
+ * then "1.1 updated French video" appended beneath). Empty to begin with.
  *
- * Run BEFORE deploying the code that reads it: the lesson editor asks for the
- * current version's notes as it opens. The code before it never names the
- * table.
+ * Replaces the per-version `lesson_version_notes` table of 2026-11-27, which
+ * held no rows when it was replaced. Rollout:
+ *
+ *   1. pnpm db:migrate-lesson-version-notes            (adds the column)
+ *   2. deploy                                          (code reads the column)
+ *   3. pnpm db:migrate-lesson-version-notes --drop-old-table
+ *
+ * Step 1 before 2: the lesson editor reads the notes as it opens. Step 3 after
+ * 2: the code deployed before it still reads the old table.
  *
  * By hand rather than `drizzle-kit push`: push diffs the whole schema and, on
  * this database, offers to truncate `docs` because of unrelated drift.
  *
- * Re-running is a no-op.
- *
- * Usage:
- *   pnpm db:migrate-lesson-version-notes
+ * Re-running either step is a no-op.
  */
 export const LESSON_VERSION_NOTES_STATEMENTS = [
-  sql`create table if not exists "lesson_version_notes" (
-    "lesson_id" integer not null constraint "lesson_version_notes_lesson_id_lessons_id_fk" references "lessons"("id") on delete cascade,
-    "version" text not null,
-    "notes" text not null,
-    "updated_at" timestamp not null default now(),
-    constraint "lesson_version_notes_lesson_id_version_pk" primary key ("lesson_id","version")
-  )`,
+  sql`alter table "lessons" add column if not exists "version_notes" text not null default ''`,
+];
+
+export const DROP_OLD_VERSION_NOTES_TABLE_STATEMENTS = [
+  sql`drop table if exists "lesson_version_notes"`,
 ];
 
 async function main() {
   // Imported here so tests can run the statements on their own database without
   // building the client `#/db` opens on DATABASE_URL.
   const { db } = await import('#/db');
-  for (const statement of LESSON_VERSION_NOTES_STATEMENTS) {
+  const dropOld = process.argv.includes('--drop-old-table');
+  for (const statement of dropOld
+    ? DROP_OLD_VERSION_NOTES_TABLE_STATEMENTS
+    : LESSON_VERSION_NOTES_STATEMENTS) {
     await db.execute(statement);
   }
-  console.log('lesson_version_notes is in place.');
+  console.log(
+    dropOld
+      ? 'lesson_version_notes table is gone.'
+      : 'lessons.version_notes is in place.',
+  );
   process.exit(0);
 }
 

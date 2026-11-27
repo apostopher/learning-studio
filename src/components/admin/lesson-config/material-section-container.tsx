@@ -64,7 +64,7 @@ export const MaterialSectionContainer = ({
   const save = useSaveLessonMaterial(lesson.id);
   const setVersion = useSetLessonVersion(lesson.id);
   const gate = useVersionGate(versioned);
-  const notes = useVersionNotes(versioned);
+  const notes = useVersionNotes(lesson.id);
   const saveNotes = useSaveLessonVersionNotes(lesson.id);
 
   /**
@@ -124,14 +124,10 @@ export const MaterialSectionContainer = ({
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     gate.attempt((version) => {
-      // Keyed by the version they describe — the one being saved, if any —
-      // so they need not wait for that save.
+      // One running note per lesson, so it need not wait for the version.
       if (notes.isDirty) {
         saveNotes.reset();
-        saveNotes.mutate({
-          version: version ?? versioned.version,
-          notes: notes.value,
-        });
+        saveNotes.mutate({ notes: notes.value });
         if (version === undefined && !isDirty) return;
       }
       if (version !== undefined && !isDirty) {
