@@ -4,14 +4,13 @@ import {
   getCourseIdentityBySlug,
 } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
-import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourse } from '#/db/lesson-access';
 import { getLibraryForCourse } from '#/db/library';
 import { getCurrentLevel } from '#/db/user-levels';
-import { hasAdminAccess } from '#/lib/admin-schemas';
 import { toGateCourse, watchedLessonSlugs } from '#/lib/lesson-gating-inputs';
 import { filterCourseToLevel } from '#/lib/level-visibility';
 import { type LibraryFile, resolveLibraryFiles } from '#/lib/library-gating';
+import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 
 export type LibraryResult = {
   /**
@@ -55,10 +54,14 @@ export async function getLibraryForUser({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, course.id),
   ]);
-  // Org `owner`/`admin` first so they never pay the staff query; a
-  // `subject-expert`/`course-manager` bypasses only on their own course.
-  const viewingAsAuthor =
-    hasAdminAccess(roles) || (await isCourseStaff(userId, course.id));
+  // See `viewsCourseAsAuthor`: staff on their course, and an owner/admin on
+  // a course they are not rostered on.
+  const viewingAsAuthor = await viewsCourseAsAuthor({
+    userId,
+    roles,
+    courseId: course.id,
+    rostered: subscribed,
+  });
   if (!viewingAsAuthor && !subscribed) return { adminBypass: false, files: [] };
 
   // An author has no tier — they wrote every one — so they skip the level

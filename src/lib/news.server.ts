@@ -13,6 +13,7 @@ import {
 import { hasAdminAccess } from '#/lib/admin-schemas';
 import { latestFirstSeenAt, shapeNewsFeed } from '#/lib/news-feed-shaping';
 import type { NewsFeedResponse } from '#/lib/news-schemas';
+import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 
 /**
  * The news feed one learner may see in one course.
@@ -46,10 +47,13 @@ export async function getNewsForUser({
     getUserRoleNames(userId),
     isSubscribedToCourse(userId, course.id),
   ]);
-  // Org `owner`/`admin` first so they never pay the staff query; a
-  // `subject-expert`/`course-manager` bypasses only on their own course.
-  const viewingAsAuthor =
-    hasAdminAccess(roles) || (await isCourseStaff(userId, course.id));
+  // See `viewsCourseAsAuthor`.
+  const viewingAsAuthor = await viewsCourseAsAuthor({
+    userId,
+    roles,
+    courseId: course.id,
+    rostered: subscribed,
+  });
   if (!viewingAsAuthor && !subscribed) {
     return {
       articles: [],

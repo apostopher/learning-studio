@@ -672,6 +672,12 @@ describe('CourseSidebarWrapper', () => {
           .getAllByRole('listitem')
           .map((li) => li.textContent),
       ).toEqual(['01Intro & Bkgnd', '02Fit-To-Fly']);
+      // Each row fainter than the last, the last fully gone.
+      expect(
+        within(locked)
+          .getAllByRole('listitem')
+          .map((li) => li.style.opacity),
+      ).toEqual(['1', '0']);
       // Names only: nothing in it opens a module or a lesson.
       expect(within(locked).queryAllByRole('button')).toEqual([]);
       expect(within(locked).queryAllByRole('link')).toEqual([]);

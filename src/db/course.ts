@@ -482,17 +482,14 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
     getUserRoleNames(userId),
     getCurrentLevelsByCourse(userId),
   ]);
-  const bypassLocks = hasAdminAccess(roles);
-  // One query for the whole grid, not one per card — and none at all for an
-  // admin, who already bypasses on org-wide authority. `subject-expert` and
-  // `course-manager` are grants over single courses, so this set is tested
-  // per card: staff read their own course as its author and every other card
-  // as an ordinary gated learner.
-  const staffCourseIds = bypassLocks
-    ? new Set<number>()
-    : await getStaffCourseIds(userId);
+  // Every card here is a course the user is rostered on, and an owner/admin
+  // on a roster takes that course as a student (`viewsCourseAsAuthor`,
+  // 2026-11-27). So only a staff row makes a card an author's: one query for
+  // the whole grid, tested per card.
+  void roles;
+  const staffCourseIds = await getStaffCourseIds(userId);
   const viewsAsAuthor = (courseId: number): boolean =>
-    bypassLocks || staffCourseIds.has(courseId);
+    staffCourseIds.has(courseId);
   // Null for an author: they wrote every tier, so none of them filters what
   // they see — the same short-circuit `evaluateLessonGate` makes. Also null
   // for a learner with no level row in the course, who under strict levels

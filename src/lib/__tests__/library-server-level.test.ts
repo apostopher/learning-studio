@@ -209,6 +209,8 @@ describe('getLibraryForUser level visibility', () => {
 
   it('does not filter for an admin, and does not look up a level for one', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
+    // Not on the course's roster: an admin there reads as its author.
+    m.isSubscribedToCourse.mockResolvedValue(false);
 
     const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
 
@@ -218,6 +220,8 @@ describe('getLibraryForUser level visibility', () => {
 
   it('serves an author the files on untagged and None lessons', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
+    // Not on the course's roster: an admin there reads as its author.
+    m.isSubscribedToCourse.mockResolvedValue(false);
     m.getCourseDetailsWithCache.mockResolvedValue({
       modules: [
         {
@@ -233,6 +237,16 @@ describe('getLibraryForUser level visibility', () => {
     const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
 
     expect(names(result)).toEqual(['Basic Handout', 'Inter Handout']);
+  });
+
+  it('filters an admin by their level when they are on the course roster', async () => {
+    m.getUserRoleNames.mockResolvedValue(['owner']);
+    m.isSubscribedToCourse.mockResolvedValue(true);
+    m.getCurrentLevel.mockResolvedValue('basic');
+
+    const result = await getLibraryForUser({ userId: 'u1', courseSlug: 'rt' });
+
+    expect(names(result)).toEqual(['Basic Handout']);
   });
 
   it('does not filter for a subject expert on their own course', async () => {
@@ -286,6 +300,8 @@ describe('getLibraryForUser level visibility', () => {
 
   it('does not query staff for an admin — they bypass on role alone', async () => {
     m.getUserRoleNames.mockResolvedValue(['admin']);
+    // Not on the course's roster: an admin there reads as its author.
+    m.isSubscribedToCourse.mockResolvedValue(false);
 
     await getLibraryForUser({ userId: 'a1', courseSlug: 'rt' });
 

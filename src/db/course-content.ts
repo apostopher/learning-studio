@@ -4,7 +4,6 @@ import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { getCourseProgress } from '#/db/course-progress';
-import { isCourseStaff } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
 import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
@@ -17,7 +16,6 @@ import {
   modulesTable,
 } from '#/db/schema';
 import { getCurrentLevel } from '#/db/user-levels';
-import { hasAdminAccess } from '#/lib/admin-schemas';
 import { courseContentToHtml, type GatedCourse } from '#/lib/course-content';
 import {
   evaluateLessonLock,
@@ -30,6 +28,7 @@ import {
   filterCourseToLevel,
   isLessonVisibleAtLevel,
 } from '#/lib/level-visibility';
+import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 
 type GatedRow = { lessonSlug: string };
 
@@ -160,8 +159,13 @@ export async function getGatedCourseForAgent(
   // Org `owner`/`admin` first so they never pay the staff query; a
   // `subject-expert`/`course-manager` reads their OWN course as its author
   // and every other course as an ordinary gated learner.
-  const viewingAsAuthor =
-    hasAdminAccess(roles) || (await isCourseStaff(userId, rows[0].courseId));
+  // See `viewsCourseAsAuthor`.
+  const viewingAsAuthor = await viewsCourseAsAuthor({
+    userId,
+    roles,
+    courseId: rows[0].courseId,
+    rostered: subscribed,
+  });
 
   // Filter 2: subscription, checked BEFORE any lock is evaluated and before
   // any course content is assembled. The lock predicates only prove a lesson's

@@ -1,10 +1,8 @@
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getCourseProgress } from '#/db/course-progress';
-import { isCourseStaff } from '#/db/course-staff';
 import { getLessonInCourse, isSubscribedToCourse } from '#/db/lesson-access';
 import { getCurrentLevel } from '#/db/user-levels';
-import { hasAdminAccess } from '#/lib/admin-schemas';
 import {
   evaluateLessonLock,
   evaluateMaterialLock,
@@ -17,6 +15,7 @@ import {
   isLessonArchivable,
   isLessonVisibleAtLevel,
 } from '#/lib/level-visibility';
+import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 import type { UserLevel } from '#/types';
 
 export * from '#/lib/lesson-gating-inputs';
@@ -124,8 +123,13 @@ export async function evaluateLessonGate({
   // `hasAdminAccess` first, and only then the staff row: `owner`/`admin`
   // authority is org-wide, so an admin must not pay a `course_staff` query on
   // a path that runs for every gated request.
-  const viewingAsAuthor =
-    hasAdminAccess(roles) || (await isCourseStaff(userId, course.courseId));
+  // See `viewsCourseAsAuthor`: an owner/admin rostered on the course is gated
+  // as a student.
+  const viewingAsAuthor = await viewsCourseAsAuthor({
+    userId,
+    roles,
+    courseId: course.courseId,
+  });
   if (viewingAsAuthor) {
     // Admins author every tier, so no level applies to them. 'advanced' is
     // reported rather than a fourth value because the field exists for copy

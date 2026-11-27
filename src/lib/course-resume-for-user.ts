@@ -2,13 +2,12 @@ import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
 import { getLastViewedLessonId } from '#/db/course-last-viewed';
 import { getCourseProgress } from '#/db/course-progress';
-import { isCourseStaff } from '#/db/course-staff';
 import { getCurrentLevel } from '#/db/user-levels';
-import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
 import type { ResumeTarget } from '#/lib/course-resume';
 import { resolveResumeTargetForLevel } from '#/lib/course-resume-level';
 import { gateProgress } from '#/lib/lesson-gating-inputs';
+import { viewsCourseAsAuthor } from '#/lib/viewing-as-author';
 
 /**
  * The session half of `getCourseResumeTarget`, kept OUT of the server fn's
@@ -81,8 +80,13 @@ export async function resumeTargetForUser({
   // pay the staff query; a `subject-expert`/`course-manager` bypasses only
   // on the course they are staffed on, and is an ordinary gated learner in
   // every other course.
-  const viewingAsAuthor =
-    hasAdminAccess(roles) || (await isCourseStaff(userId, details.id));
+  // See `viewsCourseAsAuthor`: an owner/admin rostered on the course takes it
+  // as a student.
+  const viewingAsAuthor = await viewsCourseAsAuthor({
+    userId,
+    roles,
+    courseId: details.id,
+  });
 
   // Progress is only needed to evaluate locks, and an author has none to
   // evaluate — skip the aggregation entirely for them.

@@ -1,12 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getUserRoleNames } from '#/db/admin';
 import { getCourseDetailsWithCache } from '#/db/course';
-import { isCourseStaffBySlug } from '#/db/course-staff';
 import { isSubscribedToCourseSlug } from '#/db/lesson-access';
-import { hasAdminAccess } from '#/lib/admin-schemas';
 import { auth } from '#/lib/auth';
 import type { LearnerCourseDetails } from '#/lib/course-details-shape';
 import { toLearnerCourseDetails } from '#/lib/course-details-shape';
+import { viewsCourseAsAuthorBySlug } from '#/lib/viewing-as-author';
 
 /**
  * The module/lesson tree the learner UI renders: the sidebar, the lesson page's
@@ -69,8 +68,14 @@ export async function getCourseDetailsHandler(
   // `subscribed` was true would leave exactly the people this feature exists
   // for looking at a learner's tree. One indexed join
   // (`isCourseStaffBySlug`), and an org `owner`/`admin` still pays nothing.
-  const viewingAsAuthor =
-    hasAdminAccess(roles) || (await isCourseStaffBySlug(session.user.id, slug));
+  // See `viewsCourseAsAuthor`: an owner/admin rostered on this course reads
+  // it as a student (2026-11-27).
+  const viewingAsAuthor = await viewsCourseAsAuthorBySlug({
+    userId: session.user.id,
+    roles,
+    courseSlug: slug,
+    rostered: subscribed,
+  });
   // A `subject-expert`/`course-manager` reads the tree of the course they are
   // staffed on; on any other course they are refused exactly as any other
   // stranger is. An unknown slug matches no staff row, so it fails closed.

@@ -103,6 +103,10 @@ vi.mock('#/db/course-progress', () => ({
   getCourseProgress: gate.getCourseProgress,
 }));
 vi.mock('#/db/course-staff', () => ({ isCourseStaff: gate.isCourseStaff }));
+vi.mock('#/db/course-roster-access', () => ({
+  isOnCourseRoster: async () => false,
+  isOnCourseRosterBySlug: async () => false,
+}));
 vi.mock('#/db/user-levels', () => ({ getCurrentLevel: gate.getCurrentLevel }));
 vi.mock('#/integrations/upstash/redis', () => ({ redis }));
 vi.mock('#/lib/video-providers/resolve.server', () => ({

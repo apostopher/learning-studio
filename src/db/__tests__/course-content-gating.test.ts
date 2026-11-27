@@ -584,6 +584,8 @@ describe('getCourseContentForAgent level visibility', () => {
 
   it('does not resolve a level for an admin, who authors every tier', async () => {
     getUserRoleNames.mockResolvedValue(['admin']);
+    // Not on the course's roster: an admin there reads as its author.
+    isSubscribedToCourseSlug.mockResolvedValue(false);
     const html = await getCourseContentForAgent('c1', { userId: 'admin-1' });
     expect(html).toContain('A body');
     expect(html).toContain('B body');
@@ -592,6 +594,8 @@ describe('getCourseContentForAgent level visibility', () => {
 
   it('gives an author untagged and None lessons too — they author every lesson', async () => {
     getUserRoleNames.mockResolvedValue(['admin']);
+    // Not on the course's roster: an admin there reads as its author.
+    isSubscribedToCourseSlug.mockResolvedValue(false);
     getCourseDetailsWithCache.mockResolvedValue(
       detailsFor([
         {
@@ -645,6 +649,8 @@ describe('getCourseContentForAgent level visibility', () => {
 
   it('does not query staff for an admin — they bypass on role alone', async () => {
     getUserRoleNames.mockResolvedValue(['admin']);
+    // Not on the course's roster: an admin there reads as its author.
+    isSubscribedToCourseSlug.mockResolvedValue(false);
     await getCourseContentForAgent('c1', { userId: 'admin-1' });
     expect(isCourseStaff).not.toHaveBeenCalled();
   });

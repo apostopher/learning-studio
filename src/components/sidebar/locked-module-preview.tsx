@@ -1,3 +1,10 @@
+/**
+ * Row `index` of `count`: 1 for the first, falling evenly to 0 for the last.
+ * A lone row sits halfway, so it still reads as faded.
+ */
+export const rowOpacity = (index: number, count: number): number =>
+  count <= 1 ? 0.5 : 1 - index / (count - 1);
+
 type LockedModulePreviewProps = {
   modules: readonly { slug: string; name: string }[];
   /** Why the modules are closed and what opens them. */
@@ -21,12 +28,14 @@ export const LockedModulePreview = ({
   <div className="relative min-h-32">
     <ol
       aria-label="3D Airmanship modules, not open to you yet"
-      className="flex flex-col gap-sidebar-row-gap select-none [mask-image:linear-gradient(to_bottom,black,transparent)]"
+      className="flex flex-col gap-sidebar-row-gap select-none"
     >
       {modules.map((module, index) => (
         <li
           key={module.slug}
           className="flex items-center gap-2 px-sidebar-row-inline py-sidebar-row-block text-sm text-secondary"
+          // Each row a step fainter, the last fully gone (user, 2026-11-27).
+          style={{ opacity: rowOpacity(index, modules.length) }}
         >
           <span className="tabular-nums text-tertiary text-xs font-medium shrink-0">
             {String(index + 1).padStart(2, '0')}

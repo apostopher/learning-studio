@@ -274,13 +274,13 @@ describe('getMyCourses — course staff', () => {
     expect(m.getStaffCourseIds).toHaveBeenCalledWith('u1');
   });
 
-  it('does not query staff for an admin — they bypass on role alone', async () => {
+  it('gates an admin on their cards: every card is a course they are rostered on', async () => {
+    // An owner/admin on a roster takes that course as a student (2026-11-27).
     m.getUserRoleNames.mockResolvedValue(['admin']);
 
     await getMyCourses('a1');
 
-    expect(m.getStaffCourseIds).not.toHaveBeenCalled();
-    expect(argsForCourse(7)).toMatchObject({ level: null, bypassLocks: true });
-    expect(argsForCourse(8)).toMatchObject({ level: null, bypassLocks: true });
+    expect(argsForCourse(7)).toMatchObject({ bypassLocks: false });
+    expect(argsForCourse(8)).toMatchObject({ bypassLocks: false });
   });
 });
