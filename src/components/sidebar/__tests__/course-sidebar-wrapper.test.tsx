@@ -68,6 +68,13 @@ vi.mock('../../../data-hooks/use-my-level', () => ({
   useMyLevel: () => levelMock(),
 }));
 
+const offeringMock = vi.fn<() => { data: unknown }>(() => ({
+  data: { startsOn: null },
+}));
+vi.mock('../../../data-hooks/use-my-offering', () => ({
+  useMyOffering: () => offeringMock(),
+}));
+
 import { CourseSidebarWrapper } from '../course-sidebar-wrapper';
 
 const fakeCourse = {
@@ -229,6 +236,7 @@ async function renderAt(
 
 describe('CourseSidebarWrapper', () => {
   beforeEach(() => {
+    offeringMock.mockReturnValue({ data: { startsOn: null } });
     progressMock.mockReturnValue({ data: undefined });
     levelMock.mockReturnValue({
       data: { level: 'basic', pendingChange: null },
@@ -539,6 +547,19 @@ describe('CourseSidebarWrapper', () => {
       ),
     ).toBeDefined();
     expect(screen.queryByText('Fundamentals')).toBeNull();
+  });
+
+  it("heads the course with the month and year of the pilot's offering", async () => {
+    offeringMock.mockReturnValue({ data: { startsOn: '2026-11-26' } });
+    await renderAt('/', { data: fakeCourse, isLoading: false, isError: false });
+    expect(
+      screen.getByText('November 2026 · 2 modules · 3 lessons'),
+    ).toBeDefined();
+  });
+
+  it('shows no month for someone on no offering of the course', async () => {
+    await renderAt('/', { data: fakeCourse, isLoading: false, isError: false });
+    expect(screen.getByText('2 modules · 3 lessons')).toBeDefined();
   });
 
   describe('3D Airmanship group', () => {

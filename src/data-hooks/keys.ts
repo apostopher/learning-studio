@@ -118,6 +118,8 @@ export const dataKeys = {
   lessonProgress: (lessonSlug: string) =>
     ['user', 'video-progress', lessonSlug] as const,
   myLevel: (courseSlug: string) => ['user', 'my-level', courseSlug] as const,
+  myOffering: (courseSlug: string) =>
+    ['user', 'my-offering', courseSlug] as const,
   /** Every course's progress summary: the prefix of the key below. */
   allCourseProgressSummaries: () => ['course', 'progress-summary'] as const,
   courseProgressSummary: (slug: string) =>

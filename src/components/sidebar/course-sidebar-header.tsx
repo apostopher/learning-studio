@@ -15,6 +15,11 @@ type CourseSidebarHeaderProps = {
    * meaning worth displaying).
    */
   level?: string | null;
+  /**
+   * The month and year of the viewer's offering ("November 2026"): one course
+   * runs several times a year. Absent when they are on no offering of it.
+   */
+  offeringLabel?: string | null;
 };
 
 const plural = (n: number, singular: string) =>
@@ -26,6 +31,7 @@ export const CourseSidebarHeader = ({
   lessonCount,
   coursePercent,
   level,
+  offeringLabel,
 }: CourseSidebarHeaderProps) => (
   <header className="flex flex-col gap-sidebar-row-gap px-sidebar-row-inline py-sidebar-row-block">
     <Link
@@ -55,6 +61,7 @@ export const CourseSidebarHeader = ({
           ) : null}
         </div>
         <p className="text-xs text-secondary">
+          {offeringLabel ? <>{offeringLabel} · </> : null}
           {plural(moduleCount, 'module')} · {plural(lessonCount, 'lesson')}
         </p>
       </div>

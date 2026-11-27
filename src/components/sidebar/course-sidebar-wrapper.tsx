@@ -3,6 +3,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useMemo } from 'react';
 import { useCourseProgressSummary } from '#/data-hooks/use-course-progress-summary';
 import { useMyLevel } from '#/data-hooks/use-my-level';
+import { useMyOffering } from '#/data-hooks/use-my-offering';
 import { courseDetailsAtomFamily } from '#/hooks/data/use-course-details';
 import { msUntil } from '#/lib/debrief-schedule';
 import { LEVEL_LABELS } from '#/lib/level-labels';
@@ -10,6 +11,7 @@ import {
   courseHasAvailableLessons,
   filterCourseToLevel,
 } from '#/lib/level-visibility';
+import { offeringMonthLabel } from '#/lib/viewer-offering';
 import {
   archiveSectionOpenAtom,
   flagshipGroupOpenAtom,
@@ -65,6 +67,7 @@ export const CourseSidebarWrapper = ({
   const detailsQuery = useAtomValue(courseDetailsAtomFamily(courseSlug));
   const progressQuery = useCourseProgressSummary(courseSlug);
   const levelQuery = useMyLevel(courseSlug);
+  const offeringQuery = useMyOffering(courseSlug);
   // From the SERVER, not from the viewer's roles. `useIsAdmin` answers "am I
   // an admin"; the question here is "am I looking at a course I author", and
   // for a `subject-expert`/`course-manager` those differ — they author one
@@ -298,6 +301,11 @@ export const CourseSidebarWrapper = ({
           : LEVEL_LABELS[levelQuery.data.level]
       }
       emptyReason={derived.emptyReason}
+      offeringLabel={
+        offeringQuery.data?.startsOn
+          ? offeringMonthLabel(offeringQuery.data.startsOn)
+          : null
+      }
       flagshipGroup={{
         label: FLAGSHIP_GROUP_LABEL,
         modules: derived.flagshipModules,

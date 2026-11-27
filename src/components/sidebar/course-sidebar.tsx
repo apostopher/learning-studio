@@ -46,6 +46,8 @@ type CourseSidebarProps = {
   lessonRings?: Record<string, LessonRing>;
   /** See CourseSidebarHeaderProps — absent/null means no badge. */
   level?: string | null;
+  /** See CourseSidebarHeaderProps.offeringLabel. */
+  offeringLabel?: string | null;
   /** Lessons completed at an earlier level — see ArchivedLessonsSection. */
   archivedLessons?: readonly ArchivedLesson[];
   archiveSectionOpen?: boolean;
@@ -91,6 +93,7 @@ export const CourseSidebar = ({
   lessonLocks,
   lessonRings,
   level,
+  offeringLabel,
   archivedLessons,
   archiveSectionOpen,
   onArchiveSectionOpenChange,
@@ -144,6 +147,7 @@ export const CourseSidebar = ({
               lessonCount={lessonCount ?? 0}
               coursePercent={coursePercent ?? 0}
               level={level}
+              offeringLabel={offeringLabel}
             />
             {emptyReason ? (
               <SidebarEmptyLevel reason={emptyReason} />
