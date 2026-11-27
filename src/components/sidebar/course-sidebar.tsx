@@ -1,3 +1,4 @@
+import { Separator } from '@base-ui/react/separator';
 import {
   AnimatePresence,
   MotionConfig,
@@ -153,6 +154,12 @@ export const CourseSidebar = ({
                   lessonLocks={lessonLocks ?? {}}
                   lessonRings={lessonRings}
                 />
+                {flagshipGroup &&
+                flagshipGroup.modules.length > 0 &&
+                (modules?.length ?? 0) > 0 ? (
+                  // Sets the group apart from the course's own modules above.
+                  <Separator className="mx-sidebar-row-inline h-px bg-gray-6" />
+                ) : null}
                 {flagshipGroup && flagshipGroup.modules.length > 0 ? (
                   <MotionConfig
                     reducedMotion="user"

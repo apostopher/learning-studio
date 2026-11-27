@@ -588,6 +588,22 @@ describe('CourseSidebarWrapper', () => {
         '01UAS General',
         '3D Airmanship',
       ]);
+      // A separator sets the group apart, between the two.
+      const separator = within(nav).getByRole('separator');
+      const groupButton = within(nav).getByRole('button', {
+        name: /3D Airmanship/,
+      });
+      const uasButton = within(nav).getByRole('button', {
+        name: /UAS General/,
+      });
+      expect(
+        uasButton.compareDocumentPosition(separator) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        separator.compareDocumentPosition(groupButton) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
       // The header still counts every module.
       expect(screen.getByText('3 modules · 4 lessons')).toBeDefined();
     });
