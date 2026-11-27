@@ -3,7 +3,7 @@ import { atomFamily } from 'jotai-family';
 import type { ProviderId } from '#/lib/admin-schemas';
 import type { DocSource } from '#/lib/doc-source';
 import { PRIMARY_VIDEO_LANG, type VideoLang } from '#/lib/video-languages';
-import type { UserLevel } from '#/types';
+import type { LessonMaterialGeneration, UserLevel } from '#/types';
 
 /** Whether the create-course dialog is open. */
 export const createCourseDialogOpenAtom = atom(false);
@@ -591,6 +591,17 @@ export const editorSplitPercentAtom = atom(40);
  */
 export const lessonMaterialDirtyAtomFamily = atomFamily((_lessonId: number) =>
   atom(false),
+);
+
+/**
+ * How to fill a lesson's material form with what a Word doc parsed to.
+ * Published by `MaterialSectionContainer` (which owns the form) and called by
+ * `MaterialUploadContainer`, which sits under the video preview — a different
+ * subtree. Null while no form is mounted. Boxed: jotai would call a bare
+ * function handed to its setter as an updater.
+ */
+export const lessonMaterialFillAtomFamily = atomFamily((_lessonId: number) =>
+  atom<{ fill: (parsed: LessonMaterialGeneration) => void } | null>(null),
 );
 
 /**

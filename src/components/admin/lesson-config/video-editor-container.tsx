@@ -75,21 +75,25 @@ export const VideoEditorContainer = ({
 
   return (
     <>
-      <VideoUrlForm
-        onSubmit={handleUrlSubmit}
-        registerUrl={urlForm.register('url')}
-        urlError={urlForm.formState.errors.url?.message}
-        detectedLabel={
-          detected ? VIDEO_PROVIDERS[detected.provider].label : null
-        }
-        showUnsupported={urlValue.trim().length > 0 && !detected}
-        isPending={setLessonVideo.isPending}
-        serverError={setLessonVideo.error?.message}
-        submitLabel={hasVideo ? 'Replace video' : 'Use this video'}
-      />
-      {hasVideo && (
-        <AlternateVideosContainer lessonId={lesson.id} versioned={lesson} />
-      )}
+      {/* The video and its other languages read as one group: closer to each
+          other than to the version below. */}
+      <div className="flex flex-col gap-4">
+        <VideoUrlForm
+          onSubmit={handleUrlSubmit}
+          registerUrl={urlForm.register('url')}
+          urlError={urlForm.formState.errors.url?.message}
+          detectedLabel={
+            detected ? VIDEO_PROVIDERS[detected.provider].label : null
+          }
+          showUnsupported={urlValue.trim().length > 0 && !detected}
+          isPending={setLessonVideo.isPending}
+          serverError={setLessonVideo.error?.message}
+          submitLabel={hasVideo ? 'Replace video' : 'Use this video'}
+        />
+        {hasVideo && (
+          <AlternateVideosContainer lessonId={lesson.id} versioned={lesson} />
+        )}
+      </div>
       <VersionFieldContainer lesson={lesson} />
       <VersionNotesFieldContainer lesson={lesson} />
     </>

@@ -1,7 +1,7 @@
 import { Loader2, Upload } from 'lucide-react';
 import { useRef } from 'react';
 
-/** .docx picker for the Material tab. Forwards the chosen file; reflects state. */
+/** .docx picker for the lesson's material. Forwards the chosen file; reflects state. */
 export const MaterialUpload = ({
   onFileSelected,
   isPending,
@@ -36,11 +36,11 @@ export const MaterialUpload = ({
         ) : (
           <Upload className="h-4 w-4" aria-hidden="true" />
         )}
-        {isPending ? 'Generating…' : 'Fill form from Word doc (.docx)'}
+        {isPending ? 'Generating…' : 'Fill from Word doc (.docx)'}
       </button>
       <p className="text-tertiary text-xs">
-        Extracts text, key points, pro tips, and quiz into the form below for
-        review. Overwrites the current form values.
+        Fills the text, key points, pro tips and quiz below for you to review.
+        Replaces what is there now.
       </p>
       {error && (
         <p role="alert" className="text-error-text text-sm">

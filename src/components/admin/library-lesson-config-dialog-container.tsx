@@ -9,6 +9,7 @@ import { useOrgLibrary } from '#/data-hooks/use-org-library';
 import { disciplineLessons, type LibraryLesson } from '#/lib/admin-schemas';
 import { MaterialSaveButtonContainer } from './lesson-config/material-save-button-container';
 import { MaterialSectionContainer } from './lesson-config/material-section-container';
+import { MaterialUploadContainer } from './lesson-config/material-upload-container';
 import { VideoSectionContainer } from './lesson-config/video-section-container';
 import { LibraryLessonHeadingContainer } from './library-lesson-heading-container';
 import {
@@ -94,6 +95,7 @@ export const LibraryLessonConfigDialogContainer = () => {
                 ? `Preview is signed with the first of the ${lesson.courseIds.length} courses teaching this lesson.`
                 : undefined
             }
+            belowPreview={<MaterialUploadContainer lessonId={lesson.id} />}
           />
           <MaterialSectionContainer
             key={lesson.id}

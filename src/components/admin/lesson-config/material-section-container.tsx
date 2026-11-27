@@ -2,10 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useSetAtom } from 'jotai';
 import { type FormEvent, useEffect } from 'react';
 import { type FieldErrors, useForm } from 'react-hook-form';
-import { lessonMaterialDirtyAtomFamily } from '#/atoms/admin';
+import {
+  lessonMaterialDirtyAtomFamily,
+  lessonMaterialFillAtomFamily,
+} from '#/atoms/admin';
 import { useLessonMaterial } from '#/data-hooks/use-lesson-material';
 import { useSaveLessonVersionNotes } from '#/data-hooks/use-lesson-version-notes';
-import { useParseLessonMaterial } from '#/data-hooks/use-parse-lesson-material';
 import { useSaveLessonMaterial } from '#/data-hooks/use-save-lesson-material';
 import { useSetLessonVersion } from '#/data-hooks/use-set-lesson-version';
 import type { LessonMaterialGeneration } from '#/types';
@@ -14,7 +16,6 @@ import { linkUrlId } from './link-list-field';
 import { LINK_LIST_LABELS, MaterialForm } from './material-form';
 import { lessonMaterialFormId } from './material-form-id';
 import { materialFormSchema } from './material-form-schema';
-import { MaterialUpload } from './material-upload';
 import { useVersionGate, type VersionedLesson } from './use-version-gate';
 import { useVersionNotes } from './use-version-notes';
 
@@ -60,7 +61,6 @@ export const MaterialSectionContainer = ({
   versioned: VersionedLesson;
 }) => {
   const existing = useLessonMaterial(lesson.id);
-  const parse = useParseLessonMaterial(lesson.id);
   const save = useSaveLessonMaterial(lesson.id);
   const setVersion = useSetLessonVersion(lesson.id);
   const gate = useVersionGate(versioned);
@@ -115,6 +115,23 @@ export const MaterialSectionContainer = ({
     return () => setDirty(false);
   }, [isDirty, setDirty]);
 
+  /**
+   * Publish how to fill this form from a Word doc, for the upload button under
+   * the video preview — another subtree, as with the dirty flag above.
+   * `keepDefaultValues` so the parsed content reads as DIRTY against the
+   * original defaults: that is what `keepDirtyValues` above then protects from
+   * being overwritten by a background refetch before the admin has saved it.
+   */
+  const setFill = useSetAtom(lessonMaterialFillAtomFamily(lesson.id));
+  const { reset } = form;
+  useEffect(() => {
+    setFill({
+      fill: (parsed) =>
+        reset({ ...EMPTY, ...parsed }, { keepDefaultValues: true }),
+    });
+    return () => setFill(null);
+  }, [reset, setFill]);
+
   const submitMaterial = (version: string | undefined) =>
     form.handleSubmit((values) => {
       setVersion.reset();
@@ -141,20 +158,6 @@ export const MaterialSectionContainer = ({
 
   return (
     <div className="flex flex-col gap-6">
-      <MaterialUpload
-        isPending={parse.isPending}
-        error={parse.error?.message}
-        onFileSelected={(file) =>
-          parse.mutate(file, {
-            // `keepDefaultValues` so the parsed content reads as DIRTY
-            // against the original defaults — that is what `keepDirtyValues`
-            // above then protects from being overwritten by a background
-            // refetch before the admin has saved it.
-            onSuccess: (parsed) =>
-              form.reset({ ...EMPTY, ...parsed }, { keepDefaultValues: true }),
-          })
-        }
-      />
       <AttachmentsList attachments={attachments} />
       <MaterialForm
         formId={lessonMaterialFormId(lesson.id)}

@@ -31,29 +31,55 @@ export const VideoUrlForm = ({
   onCancel,
 }: VideoUrlFormProps) => {
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-2">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="video-url" className="font-medium text-primary text-sm">
           Video URL or ID
         </label>
-        <input
-          {...registerUrl}
-          id="video-url"
-          type="text"
-          // biome-ignore lint/a11y/noAutofocus: only ever rendered inside a modal dialog the user just opened (or after pressing "Replace video"), where focus belongs on the field rather than the popup container
-          autoFocus
-          autoComplete="off"
-          placeholder="Paste a Mux playback URL/ID or Synthesia link/ID"
-          aria-invalid={!!urlError}
-          aria-describedby={urlError ? 'video-url-error' : 'video-url-hint'}
-          className={cn(
-            'min-w-0 w-full rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-tertiary',
-            'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
-            urlError
-              ? 'border-error-9 focus-visible:ring-error-9 focus-visible:border-error-9'
-              : 'border-gray-6 hover:border-gray-8',
+        {/* The field and the button that saves it, side by side. */}
+        <div className="flex items-start gap-2">
+          <input
+            {...registerUrl}
+            id="video-url"
+            type="text"
+            // biome-ignore lint/a11y/noAutofocus: only ever rendered inside a modal dialog the user just opened (or after pressing "Replace video"), where focus belongs on the field rather than the popup container
+            autoFocus
+            autoComplete="off"
+            placeholder="Paste a Mux playback URL/ID or Synthesia link/ID"
+            aria-invalid={!!urlError}
+            aria-describedby={urlError ? 'video-url-error' : 'video-url-hint'}
+            className={cn(
+              'min-w-0 flex-1 rounded-lg border bg-gray-1 px-3.5 py-2.5 text-sm text-primary outline-none transition-colors duration-100 placeholder:text-tertiary',
+              'focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:border-apple-9',
+              urlError
+                ? 'border-error-9 focus-visible:ring-error-9 focus-visible:border-error-9'
+                : 'border-gray-6 hover:border-gray-8',
+            )}
+          />
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="shrink-0 rounded-lg px-4 py-2.5 font-medium text-secondary text-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
+            >
+              Cancel
+            </button>
           )}
-        />
+          <button
+            type="submit"
+            disabled={!detectedLabel || isPending}
+            className={cn(
+              'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-apple-9 px-4 py-2.5 font-medium text-apple-contrast text-sm',
+              'transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          >
+            {isPending && (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            )}
+            {submitLabel}
+          </button>
+        </div>
         {urlError ? (
           <p
             id="video-url-error"
@@ -97,32 +123,6 @@ export const VideoUrlForm = ({
           {serverError}
         </p>
       )}
-
-      <div className="flex items-center justify-end gap-3">
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg px-4 py-2.5 font-medium text-secondary text-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
-          >
-            Cancel
-          </button>
-        )}
-        <button
-          type="submit"
-          disabled={!detectedLabel || isPending}
-          className={cn(
-            'inline-flex items-center justify-center gap-2 rounded-lg bg-apple-9 px-4 py-2.5 font-medium text-apple-contrast text-sm',
-            'transition-colors hover:bg-apple-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-9 focus-visible:ring-offset-2',
-            'disabled:cursor-not-allowed disabled:opacity-60',
-          )}
-        >
-          {isPending && (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          )}
-          {submitLabel}
-        </button>
-      </div>
     </form>
   );
 };

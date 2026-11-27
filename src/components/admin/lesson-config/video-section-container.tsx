@@ -1,5 +1,6 @@
 import { useAtom } from 'jotai';
 import { Loader2, RotateCcw } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import {
   adminPreviewLangAtomFamily,
@@ -54,6 +55,8 @@ type VideoSectionContainerProps = { lesson: VideoSectionLesson } & (
        * the first course teaching the lesson and says so.
        */
       previewNote?: string;
+      /** Under the preview, at its width: the library dialog's Word-doc fill. */
+      belowPreview?: ReactNode;
     }
   | {
       /** A course's dialog: the version it is on, only played. */
@@ -62,6 +65,7 @@ type VideoSectionContainerProps = { lesson: VideoSectionLesson } & (
       courseId: number;
       versioned?: undefined;
       previewNote?: undefined;
+      belowPreview?: undefined;
     }
 );
 
@@ -87,6 +91,7 @@ export const VideoSectionContainer = ({
   lesson,
   versioned,
   previewNote,
+  belowPreview,
 }: VideoSectionContainerProps) => {
   const [storedDraft, setStoredDraft] = useAtom(videoDraftDetectionAtom);
   const [playbackForbiddenLessonId, setPlaybackForbiddenLessonId] = useAtom(
@@ -220,24 +225,27 @@ export const VideoSectionContainer = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
-        <div className="min-w-0">
-          <VideoPreview
-            key={lesson.id}
-            playback={thumbnailPlayback}
-            onLanguageChange={(code) => {
-              if (isVideoLang(code)) setPreviewLang(code);
-            }}
-            onSourceExpired={() => playback.refetch()}
-            onPlaybackFailed={() => setPlaybackForbidden(true)}
-          />
-          {hasVideo && activeProvider && (
-            <p className="mbs-1.5 text-tertiary text-xs">
-              Current video:{' '}
-              <span className="font-medium text-secondary">
-                {VIDEO_PROVIDERS[activeProvider].label}
-              </span>
-            </p>
-          )}
+        <div className="flex min-w-0 flex-col gap-6">
+          <div>
+            <VideoPreview
+              key={lesson.id}
+              playback={thumbnailPlayback}
+              onLanguageChange={(code) => {
+                if (isVideoLang(code)) setPreviewLang(code);
+              }}
+              onSourceExpired={() => playback.refetch()}
+              onPlaybackFailed={() => setPlaybackForbidden(true)}
+            />
+            {hasVideo && activeProvider && (
+              <p className="mbs-1.5 text-tertiary text-xs">
+                Current video:{' '}
+                <span className="font-medium text-secondary">
+                  {VIDEO_PROVIDERS[activeProvider].label}
+                </span>
+              </p>
+            )}
+          </div>
+          {belowPreview}
         </div>
 
         {versioned && (
