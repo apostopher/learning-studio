@@ -5,7 +5,6 @@ import {
   accessValue,
   availabilityValue,
   debriefValue,
-  isSubscriptionDisabled,
   isVideoWatchRequiredDisabled,
   videoWatchValue,
   videoWatchWarning,
@@ -66,15 +65,6 @@ describe('config-mappings', () => {
     );
   });
 
-  it('disables subscription only when the module is free', () => {
-    expect(isSubscriptionDisabled(module({ requiredSubscriptions: [] }))).toBe(
-      true,
-    );
-    expect(
-      isSubscriptionDisabled(module({ requiredSubscriptions: ['rpoc'] })),
-    ).toBe(false);
-  });
-
   it('maps video watch', () => {
     expect(videoWatchValue(lesson({ needsVideoWatch: true }))).toBe('required');
     expect(videoWatchValue(lesson({ needsVideoWatch: false }))).toBe(
@@ -132,5 +122,14 @@ describe('config-mappings', () => {
       'candidate',
     ]);
     expect(accessSubscriptions('free', mod)).toEqual([]);
+  });
+
+  it('makes a lesson in a free module paid with every subscription', () => {
+    expect(
+      accessSubscriptions(
+        'subscription',
+        module({ requiredSubscriptions: [] }),
+      ),
+    ).toEqual(['associate', 'candidate', 'rpoc']);
   });
 });

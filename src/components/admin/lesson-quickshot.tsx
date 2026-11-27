@@ -40,7 +40,7 @@ interface QuickshotToggleProps {
   onPressedChange: (next: boolean) => void;
 }
 
-const QuickshotToggle = ({
+export const QuickshotToggle = ({
   label,
   tooltip,
   pressed,

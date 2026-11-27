@@ -3,8 +3,9 @@
 // board omits `videoProvider`/`videoRef` (`editorBoardLessonSchema`) — so
 // asking for the wider type would have kept these helpers off that board for
 // fields they never touch. A full `BoardLesson` still satisfies them.
+
+import { SubscriptionSchema, type SubscriptionType } from '#/types';
 import type { EditorBoardLesson, EditorBoardModule } from '@/lib/admin-schemas';
-import type { SubscriptionType } from '@/types';
 
 export type AvailabilityValue = 'public' | 'private';
 export type AccessValue = 'free' | 'subscription';
@@ -51,13 +52,21 @@ export const videoWatchWarning = (lesson: EditorBoardLesson): string | null => {
 export const accessValue = (lesson: EditorBoardLesson): AccessValue =>
   lesson.requiredSubscriptions.length > 0 ? 'subscription' : 'free';
 
-/** A lesson can only inherit subscriptions if its module has any. */
-export const isSubscriptionDisabled = (module: EditorBoardModule): boolean =>
-  module.requiredSubscriptions.length === 0;
-
-/** Map an Access choice to the required_subscriptions array to persist. */
+/**
+ * Map an Access choice to the required_subscriptions array to persist.
+ *
+ * Paid takes the module's subscriptions, or every subscription when the
+ * module has none. No screen sets a module's access, so every module is free,
+ * and copying only the module's would write `[]` and leave paid unreachable
+ * (2026-11-28: the card's PAID/FREE chip replaced the padlock that was stuck
+ * on exactly that).
+ */
 export const accessSubscriptions = (
   next: AccessValue,
-  module: EditorBoardModule,
-): SubscriptionType[] =>
-  next === 'subscription' ? [...module.requiredSubscriptions] : [];
+  module: Pick<EditorBoardModule, 'requiredSubscriptions'>,
+): SubscriptionType[] => {
+  if (next === 'free') return [];
+  return module.requiredSubscriptions.length > 0
+    ? [...module.requiredSubscriptions]
+    : [...SubscriptionSchema.options];
+};

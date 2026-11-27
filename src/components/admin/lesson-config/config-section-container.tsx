@@ -10,7 +10,6 @@ import {
   availabilityValue,
   type DebriefValue,
   debriefValue,
-  isSubscriptionDisabled,
   isVideoWatchRequiredDisabled,
   type VideoWatchValue,
   videoWatchValue,
@@ -38,7 +37,6 @@ export const ConfigSectionContainer = ({
 }: ConfigSectionContainerProps) => {
   const updateConfig = useUpdateLessonConfig(courseId);
   const setVisibility = useSetLessonVisibility();
-  const subscriptionDisabled = isSubscriptionDisabled(mod);
 
   return (
     <div className="flex flex-col">
@@ -65,16 +63,11 @@ export const ConfigSectionContainer = ({
 
       <ConfigSettingRow
         title="Access"
-        description={
-          subscriptionDisabled
-            ? 'This module is free — set the module’s access first.'
-            : 'Free for everyone, or limited to the module’s subscriptions.'
-        }
+        description="Free, or paid. Shown on the lesson card as FREE or PAID."
       >
         <BinaryToggle<AccessValue>
           label="Access"
           value={accessValue(lesson)}
-          disabledValue={subscriptionDisabled ? 'subscription' : undefined}
           onValueChange={(next) =>
             updateConfig.mutate({
               lessonId: lesson.id,

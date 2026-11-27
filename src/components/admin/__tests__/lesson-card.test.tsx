@@ -295,10 +295,72 @@ describe('LessonCard', () => {
     expect(screen.queryByText('v1.0')).toBeNull();
   });
 
-  it('draws no paid/free padlock: access is decided by the schedule', () => {
+  it('draws no paid/free chip on a read-only card', () => {
     render(<LessonCard lesson={lesson()} />);
+    expect(screen.queryByRole('button', { name: /lesson\. Tap/ })).toBeNull();
+  });
+
+  it('shows a paid lesson as a pressed PAID chip that offers to make it free', () => {
+    const onToggle = vi.fn();
+    render(
+      <LessonCard lesson={lesson()} access={{ isPaid: true, onToggle }} />,
+    );
+    const chip = screen.getByRole('button', {
+      name: 'Paid lesson. Tap to make it free.',
+    });
+    expect(chip.textContent).toBe('Paid');
+    // State is announced, not carried by the colour alone.
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(chip);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a free lesson as an unpressed FREE chip', () => {
+    const onToggle = vi.fn();
+    render(
+      <LessonCard lesson={lesson()} access={{ isPaid: false, onToggle }} />,
+    );
+    const chip = screen.getByRole('button', {
+      name: 'Free lesson. Tap to make it paid.',
+    });
+    expect(chip.textContent).toBe('Free');
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(chip);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the chip after the version, in the same row', () => {
+    render(
+      <LessonCard
+        lesson={lesson()}
+        version={{
+          version: '1.0',
+          disciplineVersion: '1.0',
+          editedIn: 'CPL',
+        }}
+        access={{ isPaid: false, onToggle: vi.fn() }}
+      />,
+    );
+    const chip = screen.getByRole('button', { name: /Free lesson/ });
+    const versionChip = screen.getByRole('button', { name: /Up to date/ });
+    expect(chip.parentElement).toBe(versionChip.parentElement);
     expect(
-      screen.queryByRole('button', { name: /Make it (paid|free)/ }),
-    ).toBeNull();
+      versionChip.compareDocumentPosition(chip) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('goes inert while the access change is saving', () => {
+    const onToggle = vi.fn();
+    render(
+      <LessonCard
+        lesson={lesson()}
+        access={{ isPaid: false, onToggle, isPending: true }}
+      />,
+    );
+    const chip = screen.getByRole('button', { name: 'Updating access…' });
+    expect(chip.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(chip);
+    expect(onToggle).not.toHaveBeenCalled();
   });
 });

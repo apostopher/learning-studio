@@ -5,12 +5,13 @@ import { toast } from 'sonner';
 import { playLessonAtom } from '#/atoms/admin';
 import { useSetLessonVisibility } from '#/data-hooks/use-set-lesson-visibility';
 import { useUnlinkLesson } from '#/data-hooks/use-unlink-lesson';
+import { useUpdateEditorLessonConfig } from '#/data-hooks/use-update-editor-lesson-config';
 import type { EditorBoardLesson, EditorBoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { EditorLessonQuickshotContainer } from './editor-lesson-quickshot-container';
 import { LessonCard } from './lesson-card';
-import { removeLessonLabel } from './lesson-card-labels';
+import { lessonAccess, removeLessonLabel } from './lesson-card-labels';
 
 /**
  * A lesson already placed in a module, made sortable inside the editor's
@@ -78,6 +79,9 @@ export const EditorLessonCardContainer = ({
   const unlinkLesson = useUnlinkLesson();
   const setPlayLesson = useSetAtom(playLessonAtom);
   const setVisibility = useSetLessonVisibility();
+  // The same save the quickshot chips use: one optimistic cache write and
+  // one rollback path for every chip on the card.
+  const updateConfig = useUpdateEditorLessonConfig();
 
   return (
     <div
@@ -115,6 +119,12 @@ export const EditorLessonCardContainer = ({
             ),
           isPending: unlinkLesson.isPending,
         }}
+        access={lessonAccess(
+          lesson,
+          mod,
+          (patch) => updateConfig.mutate({ lessonId: lesson.id, patch }),
+          updateConfig.isPending,
+        )}
         // With the column's course: the rail shows several courses and the
         // same lesson may sit in two of them, and the preview resolves
         // playback for the lesson IN one named course.

@@ -1,6 +1,14 @@
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported (for real, not mocked) by the drag-rules test.
 
+import { accessSubscriptions } from '#/components/admin/lesson-config/config-mappings';
+import type {
+  EditorBoardLesson,
+  EditorBoardModule,
+  UpdateLessonConfigInput,
+} from '#/lib/admin-schemas';
+import type { LessonCardAccess } from './lesson-card';
+
 /**
  * The accessible name and tooltip of a placed lesson's "remove" control.
  *
@@ -35,4 +43,28 @@ export function visibilityLabel(isVisible: boolean, sharedWith = 0): string {
   return isVisible
     ? `Visible to students. Hide it${also}`
     : `Hidden from students. Show it${also}`;
+}
+
+/**
+ * The PAID/FREE chip's props for a placed lesson: paid when it requires any
+ * subscription. Shared by both boards' card containers so the rule lives once.
+ */
+export function lessonAccess(
+  lesson: Pick<EditorBoardLesson, 'requiredSubscriptions'>,
+  module: Pick<EditorBoardModule, 'requiredSubscriptions'>,
+  save: (patch: Pick<UpdateLessonConfigInput, 'requiredSubscriptions'>) => void,
+  isPending: boolean,
+): LessonCardAccess {
+  const isPaid = lesson.requiredSubscriptions.length > 0;
+  return {
+    isPaid,
+    isPending,
+    onToggle: () =>
+      save({
+        requiredSubscriptions: accessSubscriptions(
+          isPaid ? 'free' : 'subscription',
+          module,
+        ),
+      }),
+  };
 }

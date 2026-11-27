@@ -1,4 +1,5 @@
 import { CircleMinus, Eye, EyeOff, GripVertical, Pencil } from 'lucide-react';
+import { MotionConfig } from 'motion/react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import type { BoardLesson } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
@@ -6,6 +7,7 @@ import { ClampedText } from '../clamped-text';
 import { Chip } from '../ui/chip';
 import { TooltipIconButton } from '../ui/tooltip-icon-button';
 import { visibilityLabel } from './lesson-card-labels';
+import { QuickshotToggle } from './lesson-quickshot';
 import { LessonVideoTile } from './lesson-video-tile';
 import { VersionChip, type VersionChipProps } from './version-chip';
 
@@ -23,12 +25,20 @@ export type LessonCardLesson = Pick<
   'name' | 'isAvailable' | 'isConfigured'
 >;
 
+export type LessonCardAccess = {
+  isPaid: boolean;
+  onToggle: () => void;
+  /** Save in flight: the chip goes inert and says so. */
+  isPending?: boolean;
+};
+
 export const LessonCard = ({
   lesson,
   posterUrl,
   dragHandleProps,
   onConfigure,
   remove,
+  access,
   onPlay,
   quickshotSlot,
   version,
@@ -60,6 +70,11 @@ export const LessonCard = ({
     /** Removal in flight: the control goes inert and says so. */
     isPending?: boolean;
   };
+  /**
+   * Paid or free, as a chip after the version: PAID green, FREE dull.
+   * Omitted on read-only cards (drag overlay, borrowed lists).
+   */
+  access?: LessonCardAccess;
   /** Opens the preview modal. Omitted where there is nowhere to open it. */
   onPlay?: () => void;
   /**
@@ -198,16 +213,45 @@ export const LessonCard = ({
             Also in {alsoIn.join(', ')}
           </Chip>
         )}
-        {(quickshotSlot || version) && (
-          // Right-aligned so the last chip ends under the last icon. `pe-1.5`
-          // is the icon button's own inset ((28px box − 16px glyph) / 2), so
-          // the chip lines up with the icon you see, not its hit area.
-          <div className="col-start-1 flex flex-wrap items-center justify-end gap-1.5 pe-1.5">
+        {(quickshotSlot || version || access) && (
+          // Full width, so the last chip ends under the drag grip. `pe-1` is
+          // the grip glyph's own empty right edge (its dots stop 4px short
+          // of the 14px box, which itself ends at the grid's edge), so the
+          // chip lines up with the dots you see, not the box.
+          <div className="col-span-full flex flex-wrap items-center justify-end gap-1.5 pe-1">
             {quickshotSlot}
             {version && <VersionChip {...version} />}
+            {access && <AccessChip access={access} />}
           </div>
         )}
       </div>
     </div>
   );
 };
+
+/**
+ * The paid/free chip. PAID and FREE are both four letters in the chip's mono
+ * face over a shared `min-w`, so flipping one never moves the row; the save
+ * in flight only dims it.
+ *
+ * A `QuickshotToggle`, so it presses, announces its state and explains itself
+ * the same way BRIEF and WATCH beside it do.
+ */
+const AccessChip = ({ access }: { access: LessonCardAccess }) => (
+  <MotionConfig reducedMotion="user">
+    <QuickshotToggle
+      label={access.isPaid ? 'Paid' : 'Free'}
+      tooltip={
+        access.isPending
+          ? 'Updating access…'
+          : access.isPaid
+            ? 'Paid lesson. Tap to make it free.'
+            : 'Free lesson. Tap to make it paid.'
+      }
+      pressed={access.isPaid}
+      tone={access.isPaid ? 'solid-success' : 'muted'}
+      disabled={Boolean(access.isPending)}
+      onPressedChange={() => access.onToggle()}
+    />
+  </MotionConfig>
+);

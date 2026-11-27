@@ -322,3 +322,42 @@ describe('EditorLessonCardContainer — visibility', () => {
     );
   });
 });
+
+/**
+ * The PAID/FREE chip. Asserted on the PATCH body, since a chip wired to a
+ * no-op renders identically.
+ */
+describe('EditorLessonCardContainer — PAID/FREE chip', () => {
+  const patchBodies = () =>
+    fetchMock.mock.calls
+      .filter(([url]) => String(url) === `/api/admin/lessons/${LESSON_ID}`)
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+  const chip = (name: string) =>
+    document.querySelector<HTMLButtonElement>(`[aria-label="${name}"]`);
+
+  it('makes a free lesson in a free module paid with every subscription', async () => {
+    renderCard({ requiredSubscriptions: [] });
+    const button = chip('Free lesson. Tap to make it paid.');
+    expect(button?.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      fireEvent.click(button as HTMLButtonElement);
+    });
+
+    expect(patchBodies()).toEqual([
+      { requiredSubscriptions: ['associate', 'candidate', 'rpoc'] },
+    ]);
+  });
+
+  it('makes a paid lesson free', async () => {
+    renderCard({ requiredSubscriptions: ['rpoc'] });
+    const button = chip('Paid lesson. Tap to make it free.');
+    expect(button?.getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => {
+      fireEvent.click(button as HTMLButtonElement);
+    });
+
+    expect(patchBodies()).toEqual([{ requiredSubscriptions: [] }]);
+  });
+});

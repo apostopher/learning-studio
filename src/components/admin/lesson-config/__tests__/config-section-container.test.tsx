@@ -116,7 +116,9 @@ describe('ConfigSectionContainer', () => {
     ).toBe('true');
   });
 
-  it('disables the Subscription option when the module is free', () => {
+  it('offers Subscription even when the module is free', () => {
+    // No screen sets a module's access, so every module is free; paid then
+    // takes every subscription (`accessSubscriptions`).
     render(
       <ConfigSectionContainer
         courseId={1}
@@ -127,7 +129,7 @@ describe('ConfigSectionContainer', () => {
     );
     expect(screen.getByRole('button', { name: 'Subscription' })).toHaveProperty(
       'disabled',
-      true,
+      false,
     );
   });
 

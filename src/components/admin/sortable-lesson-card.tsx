@@ -3,10 +3,12 @@ import { CSS } from '@dnd-kit/utilities';
 import { useSetAtom } from 'jotai';
 import { configureLessonIdAtom, playLessonAtom } from '#/atoms/admin';
 import { useSetLessonVisibility } from '#/data-hooks/use-set-lesson-visibility';
+import { useUpdateLessonConfig } from '#/data-hooks/use-update-lesson-config';
 import type { BoardLesson, BoardModule } from '#/lib/admin-schemas';
 import { cn } from '#/lib/cn';
 import { lessonDndId } from '#/lib/dnd-ids';
 import { LessonCard } from './lesson-card';
+import { lessonAccess } from './lesson-card-labels';
 import { LessonQuickshotContainer } from './lesson-quickshot-container';
 
 export const SortableLessonCard = ({
@@ -41,6 +43,9 @@ export const SortableLessonCard = ({
   const setConfigureLessonId = useSetAtom(configureLessonIdAtom);
   const setPlayLesson = useSetAtom(playLessonAtom);
   const setVisibility = useSetLessonVisibility();
+  // The same save the quickshot chips use: one optimistic cache write and
+  // one rollback path for every chip on the card.
+  const updateConfig = useUpdateLessonConfig(courseId);
 
   return (
     <div
@@ -69,6 +74,12 @@ export const SortableLessonCard = ({
           sharedWith: mod.otherCourseCount,
         }}
         onConfigure={() => setConfigureLessonId(lesson.id)}
+        access={lessonAccess(
+          lesson,
+          mod,
+          (patch) => updateConfig.mutate({ lessonId: lesson.id, patch }),
+          updateConfig.isPending,
+        )}
         // With the course: the preview resolves playback for the lesson IN
         // this course, and this board is one course's board.
         onPlay={

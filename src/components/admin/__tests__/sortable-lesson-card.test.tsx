@@ -152,12 +152,6 @@ describe('SortableLessonCard', () => {
   /**
    * Deleting a lesson everywhere moved to the library card only.
    */
-  it('offers no paid/free padlock: the schedule decides who sees a lesson', () => {
-    renderCard(LIBRARY);
-
-    expect(cardProps.mock.calls[0][0]).not.toHaveProperty('access');
-  });
-
   it('offers no delete on a course board', () => {
     renderCard(LIBRARY);
 
@@ -224,6 +218,51 @@ describe('SortableLessonCard — visibility', () => {
     renderCard(LIBRARY);
     expect(cardProps.mock.calls[0][0].visibility).toMatchObject({
       isPending: false,
+    });
+  });
+});
+
+/**
+ * The PAID/FREE chip makes the lesson paid or free through the same config
+ * mutation. Asserted on the PATCH that leaves the browser, not on the prop.
+ */
+describe('SortableLessonCard — PAID/FREE chip', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  const toggle = async () => {
+    const access = cardProps.mock.calls[0][0].access as {
+      isPaid: boolean;
+      onToggle: () => void;
+    };
+    await act(async () => {
+      access.onToggle();
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(`/api/admin/lessons/${lesson.id}`);
+    return JSON.parse(String((init as RequestInit).body));
+  };
+
+  it('makes a free lesson paid with its module’s subscriptions', async () => {
+    renderCard(LIBRARY);
+    expect(cardProps.mock.calls[0][0].access.isPaid).toBe(false);
+
+    expect(await toggle()).toEqual({ requiredSubscriptions: ['associate'] });
+  });
+
+  it('makes a lesson in a free module paid with every subscription', async () => {
+    renderCard(LIBRARY, { ...mod, requiredSubscriptions: [] });
+
+    expect(await toggle()).toEqual({
+      requiredSubscriptions: ['associate', 'candidate', 'rpoc'],
     });
   });
 });
