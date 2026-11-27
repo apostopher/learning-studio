@@ -373,6 +373,8 @@ describe('OfferingPopoverContainer roster levels', () => {
       'Level for Ada Lovelace: Advanced. Press to change.',
     );
     press();
+    expect(adaChip().textContent).toBe('–');
+    press();
     expect(adaChip().textContent).toBe('BASIC');
 
     expect(levelWrite.mutateAsync).not.toHaveBeenCalled();
@@ -385,6 +387,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     act(() => vi.advanceTimersByTime(500));
+    press(); // no level
     press(); // basic — restarts the wait
     act(() => vi.advanceTimersByTime(699));
     expect(levelWrite.mutateAsync).not.toHaveBeenCalled();
@@ -408,6 +411,8 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(adaChip().getAttribute('aria-busy')).toBe('true');
 
     press();
+    expect(adaChip().textContent).toBe('–');
+    press();
     expect(adaChip().textContent).toBe('BASIC');
     expect(adaChip().getAttribute('aria-busy')).toBe('true');
   });
@@ -417,6 +422,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
+    press(); // no level
     press(); // basic
     settleDebounce();
     // Not a second, racing PUT: it waits for the first to settle…
@@ -445,6 +451,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
+    press(); // no level
     press(); // basic
     settleDebounce();
     press(); // intermediate
@@ -467,6 +474,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
+    press(); // no level
     press(); // basic
     press(); // intermediate
     press(); // advanced
@@ -484,6 +492,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     press(); // advanced
     settleDebounce();
+    press(); // no level
     press(); // basic
     settleDebounce();
     await act(async () => writes[0].resolve());
@@ -519,6 +528,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     pinA();
     // Round from the row's own level, before the debounce.
     press(); // advanced
+    press(); // no level
     press(); // basic
     press(); // intermediate
     settleDebounce();
@@ -529,6 +539,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     press(); // advanced
     settleDebounce();
     await act(async () => writes[0].resolve());
+    press(); // no level
     press(); // basic
     press(); // intermediate
     press(); // advanced
@@ -536,6 +547,32 @@ describe('OfferingPopoverContainer roster levels', () => {
     expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledTimes(1);
     expect(adaChip().textContent).toBe('EXPERT');
+  });
+
+  it('steps Expert to no level (–), and saves that as taking the level away', async () => {
+    const { pinA } = renderPopover([withAda], true);
+    pinA();
+    press(); // advanced
+    press(); // no level
+    expect(adaChip().textContent).toBe('–');
+    expect(adaChip().getAttribute('aria-label')).toBe(
+      'Level for Ada Lovelace: No level. Press to change.',
+    );
+    settleDebounce();
+
+    expect(levelWrite.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(levelWrite.mutateAsync.mock.calls[0][0]).toEqual({
+      profileId: 42,
+      courseId: 3,
+      level: 'none',
+      message:
+        'Your training team removed your level in Instrument Ground School.',
+    });
+    await act(async () => writes[0].resolve());
+    expect(toast.success).toHaveBeenCalledWith(
+      'Ada Lovelace has no level in Instrument Ground School',
+    );
+    expect(adaChip().textContent).toBe('–');
   });
 
   it('leaving the page with a save still waiting writes it at once', () => {
@@ -582,6 +619,7 @@ describe('OfferingPopoverContainer roster levels', () => {
     });
     // B shows the same course's pending level, and steps on from it.
     expect(adaChip().textContent).toBe('EXPERT');
+    press(); // no level
     press(); // basic
     settleDebounce();
 

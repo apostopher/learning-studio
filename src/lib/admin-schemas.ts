@@ -11,6 +11,7 @@ import {
   LessonMaterialGenerationSchema,
   OtherVideoIdSchema,
   SubscriptionsSchema,
+  StoredUserLevelSchema,
   UserLevelSchema,
 } from '#/types';
 
@@ -1007,7 +1008,8 @@ export type UpdateUserProfileInput = z.infer<
 export const setUserLevelInputSchema = z
   .object({
     courseId: z.number().int().positive(),
-    level: UserLevelSchema,
+    /** `'none'` takes the pilot's level away (the roster's "–"). */
+    level: StoredUserLevelSchema,
     message: z.string().trim().min(1, 'A message for the pilot is required'),
     note: z.string().trim().optional(),
   })

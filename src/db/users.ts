@@ -8,7 +8,11 @@ import {
   userRolesTable,
 } from '#/db/schema';
 import type { UpdateUserProfileInput } from '#/lib/admin-schemas';
-import type { UserLevel } from '#/types';
+import {
+  currentUserLevel,
+  type StoredUserLevel,
+  type UserLevel,
+} from '#/types';
 
 export type AdminUser = {
   profileId: number;
@@ -135,7 +139,7 @@ export async function listUsers(): Promise<AdminUser[]> {
     db.execute<{
       user_id: string;
       course_id: number;
-      level: UserLevel;
+      level: StoredUserLevel;
     }>(sql`
       SELECT DISTINCT ON (user_id, course_id) user_id, course_id, level
       FROM user_levels
@@ -159,8 +163,11 @@ export async function listUsers(): Promise<AdminUser[]> {
 
   const levelsByUser = new Map<string, Record<number, UserLevel>>();
   for (const row of levelRows.rows) {
+    // Newest row took the level away: no level, like having no rows.
+    const level = currentUserLevel(row.level);
+    if (level === null) continue;
     const existing = levelsByUser.get(row.user_id) ?? {};
-    existing[row.course_id] = row.level;
+    existing[row.course_id] = level;
     levelsByUser.set(row.user_id, existing);
   }
 

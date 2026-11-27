@@ -1,5 +1,20 @@
 import { LEVEL_LABELS } from '#/lib/level-labels';
-import { USER_LEVELS, type UserLevel } from '#/types';
+import {
+  STORED_USER_LEVELS,
+  type StoredUserLevel,
+  type UserLevel,
+} from '#/types';
+
+/**
+ * A level as the roster chip holds it: a tier, or `'none'` — no level, shown
+ * as "–". Not null, because the chip's save queue uses null for "nothing in
+ * flight". The same value `user_levels` stores for a level taken away.
+ */
+export type RosterLevel = StoredUserLevel;
+
+/** A roster row's level as the chip holds it. */
+export const toRosterLevel = (level: UserLevel | null): RosterLevel =>
+  level ?? 'none';
 
 /**
  * How long the roster's level chip waits after a press before it saves.
@@ -12,12 +27,17 @@ export const ROSTER_LEVEL_SAVE_DELAY_MS = 700;
 /**
  * The level a press on the roster's chip moves to.
  *
- * No level → Basic → Intermediate → Advanced → Basic. Never back to "no
- * level": levels are append-only, so there is nothing to cycle back to.
+ * Basic → Intermediate → Advanced → no level (–) → Basic (user, 2026-11-27:
+ * a level can be taken away). The table stays append-only: no level is a
+ * newer `'none'` row, not a delete.
  */
-export function nextRosterLevel(level: UserLevel | null): UserLevel {
-  if (level === null) return USER_LEVELS[0];
-  return USER_LEVELS[(USER_LEVELS.indexOf(level) + 1) % USER_LEVELS.length];
+const CYCLE = [
+  ...STORED_USER_LEVELS.filter((l) => l !== 'none'),
+  'none',
+] as const;
+
+export function nextRosterLevel(level: RosterLevel): RosterLevel {
+  return CYCLE[(CYCLE.indexOf(level) + 1) % CYCLE.length];
 }
 
 /**
@@ -27,7 +47,20 @@ export function nextRosterLevel(level: UserLevel | null): UserLevel {
  */
 export function rosterLevelMessage(
   courseName: string,
-  level: UserLevel,
+  level: RosterLevel,
 ): string {
-  return `Your training team set your level in ${courseName} to ${LEVEL_LABELS[level]}.`;
+  return level === 'none'
+    ? `Your training team removed your level in ${courseName}.`
+    : `Your training team set your level in ${courseName} to ${LEVEL_LABELS[level]}.`;
+}
+
+/** How a saved roster level reads in the toast. */
+export function rosterLevelSavedToast(
+  name: string,
+  level: RosterLevel,
+  courseName: string,
+): string {
+  return level === 'none'
+    ? `${name} has no level in ${courseName}`
+    : `${name} is now ${LEVEL_LABELS[level]} in ${courseName}`;
 }

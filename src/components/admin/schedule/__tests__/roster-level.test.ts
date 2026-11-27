@@ -7,7 +7,7 @@ import {
 
 describe('nextRosterLevel', () => {
   it('starts someone with no level at Basic', () => {
-    expect(nextRosterLevel(null)).toBe('basic');
+    expect(nextRosterLevel('none')).toBe('basic');
   });
 
   it('climbs Basic → Intermediate → Advanced', () => {
@@ -15,8 +15,8 @@ describe('nextRosterLevel', () => {
     expect(nextRosterLevel('intermediate')).toBe('advanced');
   });
 
-  it('wraps Advanced back to Basic — never back to no level', () => {
-    expect(nextRosterLevel('advanced')).toBe('basic');
+  it('steps Advanced to no level, so a level can be taken away', () => {
+    expect(nextRosterLevel('advanced')).toBe('none');
   });
 });
 
@@ -24,6 +24,14 @@ describe('rosterLevelMessage', () => {
   it('tells the pilot the course and the full level name', () => {
     expect(rosterLevelMessage('Instrument Ground School', 'intermediate')).toBe(
       'Your training team set your level in Instrument Ground School to Intermediate.',
+    );
+  });
+});
+
+describe('rosterLevelMessage for no level', () => {
+  it('tells the pilot their level was removed', () => {
+    expect(rosterLevelMessage('ITPS', 'none')).toBe(
+      'Your training team removed your level in ITPS.',
     );
   });
 });

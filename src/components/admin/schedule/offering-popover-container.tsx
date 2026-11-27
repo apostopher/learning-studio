@@ -21,14 +21,13 @@ import {
   useUpdateOffering,
 } from '#/data-hooks/use-offerings';
 import { useSetUserCourseLevel } from '#/data-hooks/use-user-levels';
-import { LEVEL_LABELS } from '#/lib/level-labels';
 import {
   type Offering,
   type OfferingFormValues,
   type OfferingUser,
   offeringFormSchema,
 } from '#/lib/offering-schemas';
-import type { UserLevel } from '#/types';
+import { currentUserLevel, type UserLevel } from '#/types';
 import { OfferingAddPerson } from './offering-add-person';
 import { OfferingDiscardConfirm } from './offering-discard-confirm';
 import { OfferingForm } from './offering-form';
@@ -48,7 +47,10 @@ import {
 import {
   nextRosterLevel,
   ROSTER_LEVEL_SAVE_DELAY_MS,
+  type RosterLevel,
   rosterLevelMessage,
+  rosterLevelSavedToast,
+  toRosterLevel,
 } from './roster-level';
 
 /**
@@ -328,10 +330,12 @@ export const OfferingPopoverContainer = ({
     courseId === null
       ? undefined
       : levelEdits[rosterLevelEditKey(courseId, userId)];
-  const displayLevel = (userId: string): UserLevel | null =>
-    editFor(userId)?.level ??
-    users.find((row) => row.userId === userId)?.level ??
-    null;
+  const displayLevel = (userId: string): UserLevel | null => {
+    const edit = editFor(userId);
+    return edit
+      ? currentUserLevel(edit.level)
+      : (users.find((row) => row.userId === userId)?.level ?? null);
+  };
   const savingUserIds = users
     .filter((row) => editFor(row.userId)?.sending != null)
     .map((row) => row.userId);
@@ -373,7 +377,7 @@ export const OfferingPopoverContainer = ({
    * entry clears. After a failure that leaves the chip on the last saved
    * level (the roster row's own).
    */
-  const settleLevelSave = (key: string, sent: UserLevel) => {
+  const settleLevelSave = (key: string, sent: RosterLevel) => {
     const edit = store.get(rosterLevelEditsAtom)[key];
     if (!edit) return;
     if (edit.timer === null && edit.queued && edit.level !== sent) {
@@ -424,7 +428,7 @@ export const OfferingPopoverContainer = ({
           patchLevelEdit(key, (e) => ({ ...e, saved: level }));
           try {
             toast.success(
-              `${edit.name} is now ${LEVEL_LABELS[level]} in ${edit.courseName}`,
+              rosterLevelSavedToast(edit.name, level, edit.courseName),
             );
             // The level is saved either way; the roster is only patched if it
             // is still the one the level was chosen in (the invalidation
@@ -437,7 +441,9 @@ export const OfferingPopoverContainer = ({
                 form
                   .getValues('users')
                   .map((row) =>
-                    row.userId === edit.userId ? { ...row, level } : row,
+                    row.userId === edit.userId
+                      ? { ...row, level: currentUserLevel(level) }
+                      : row,
                   ),
               );
             }
@@ -508,9 +514,9 @@ export const OfferingPopoverContainer = ({
         userId,
         profileId,
         name: person.name,
-        level: nextRosterLevel(previous?.level ?? person.level),
+        level: nextRosterLevel(previous?.level ?? toRosterLevel(person.level)),
         timer,
-        saved: previous ? previous.saved : person.level,
+        saved: previous ? previous.saved : toRosterLevel(person.level),
         sending: previous?.sending ?? null,
         queued: previous?.queued ?? false,
       },

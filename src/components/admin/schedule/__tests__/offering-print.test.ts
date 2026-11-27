@@ -47,7 +47,7 @@ describe('offeringPrintHtml', () => {
     );
     expect(rows).toEqual([
       ['1', 'David Cooke', 'david@example.com', 'Basic'],
-      ['2', 'Adam <b>D</b>', 'adam@example.com', 'Not set'],
+      ['2', 'Adam <b>D</b>', 'adam@example.com', '–'],
     ]);
     expect(doc.querySelector('tbody b')).toBeNull();
     expect(doc.body.textContent).toContain('Students · 2 people');

@@ -36,7 +36,7 @@ import {
   setUserLevelInputSchema,
 } from '#/lib/admin-schemas';
 import { isFlagshipCourse } from '#/lib/flagship-course';
-import type { UserLevel } from '#/types';
+import { type UserLevel, UserLevelSchema } from '#/types';
 import { AddPersonDialog } from './add-person-dialog';
 import { RolePermissionsPanel } from './role-permissions-panel';
 import {
@@ -58,7 +58,10 @@ type ProfileForm = {
 };
 
 /** Message required, note optional — `courseId` comes from the draft atom, not the form. */
-const levelFormSchema = setUserLevelInputSchema.omit({ courseId: true });
+// The People page sets a tier; only the roster's chip takes a level away.
+const levelFormSchema = setUserLevelInputSchema
+  .omit({ courseId: true })
+  .extend({ level: UserLevelSchema });
 type LevelForm = {
   level: UserLevel;
   message: string;

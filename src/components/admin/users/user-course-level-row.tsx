@@ -123,7 +123,9 @@ export const UserCourseLevelHistory = ({
               >
                 <div className="flex flex-wrap items-center gap-x-1.5 text-secondary">
                   <span className="font-medium text-primary">
-                    {LEVEL_LABELS[row.level]}
+                    {row.level === 'none'
+                      ? 'No level'
+                      : LEVEL_LABELS[row.level]}
                   </span>
                   <span aria-hidden="true">·</span>
                   <span>{format(row.createdAt, 'd MMM yyyy')}</span>

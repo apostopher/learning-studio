@@ -6,8 +6,8 @@ import {
   reduceOfferingPopover,
 } from '#/components/admin/schedule/offering-popover-state';
 import type { PopoverAnchor } from '#/components/admin/schedule/popover-anchor';
+import type { RosterLevel } from '#/components/admin/schedule/roster-level';
 import { calendarWindowStart } from '#/components/calendar';
-import type { UserLevel } from '#/types';
 
 /**
  * The first week drawn by the schedule calendar.
@@ -94,13 +94,13 @@ export type RosterLevelEdit = {
   profileId: number;
   name: string;
   /** What the chip shows, and what the next save writes. */
-  level: UserLevel;
+  level: RosterLevel;
   /**
    * The level known to be saved: the roster row's own when the edit began,
    * then each level a save confirmed. A save of this level is skipped — no
    * redundant write, no second pilot message for the same level.
    */
-  saved: UserLevel | null;
+  saved: RosterLevel;
   /** The debounced save, while one is waiting. */
   timer: ReturnType<typeof setTimeout> | null;
   /**
@@ -108,7 +108,7 @@ export type RosterLevelEdit = {
    * two concurrent PUTs could land out of order, and each one messages the
    * pilot.
    */
-  sending: UserLevel | null;
+  sending: RosterLevel | null;
   /**
    * A save came due (debounce or flush) while one was sending. When that one
    * settles, `level` is sent once — if it differs from what just went.

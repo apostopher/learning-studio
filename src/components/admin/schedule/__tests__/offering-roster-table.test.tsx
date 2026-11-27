@@ -59,11 +59,11 @@ describe('OfferingRosterTable level cell', () => {
     expect(adaChip().textContent).toBe('INTER');
     // The shared chip shape and the level's tone, not a bespoke colour.
     expect(adaChip().className).toContain('bg-apple-3');
-    // No level yet: a muted chip that says so, not a blank or "NONE".
+    // No level: a muted "–" chip; its accessible name says "No level".
     const bobChip = screen.getByRole('button', {
       name: 'Level for Bob Hoover: No level. Press to change.',
     });
-    expect(bobChip.textContent).toBe('No level');
+    expect(bobChip.textContent).toBe('–');
     expect(bobChip.className).toContain('bg-gray-4');
     expect(screen.queryByRole('combobox')).toBeNull();
   });
@@ -138,7 +138,7 @@ describe('OfferingRosterTable level cell', () => {
     );
     expect(screen.queryByRole('button', { name: /Level for/ })).toBeNull();
     expect(screen.getByText('INTER')).toBeTruthy();
-    expect(screen.getByText('No level')).toBeTruthy();
+    expect(screen.getByText('–')).toBeTruthy();
     expect(screen.getByText(/Levels are view only/)).toBeTruthy();
   });
 

@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { dataKeys } from '#/data-hooks/keys';
 import { useInvalidateUsers } from '#/data-hooks/use-admin-users';
-import { LevelSourceSchema, UserLevelSchema } from '#/types';
+import { LevelSourceSchema, StoredUserLevelSchema } from '#/types';
 
 const historyRowSchema = z.object({
   id: z.number(),
-  level: UserLevelSchema,
+  /** `'none'`: the level was taken away. */
+  level: StoredUserLevelSchema,
   source: LevelSourceSchema,
   message: z.string().nullable(),
   note: z.string().nullable(),

@@ -33,7 +33,8 @@ export function isUserLevel(value: string): value is UserLevel {
  * levels; `'none'` differs in being an explicit withdrawal, which
  * `isLessonWithdrawn` reads.
  *
- * Lesson fields only — a USER's level is always a `UserLevel`.
+ * Lesson fields only — a USER's level is a `UserLevel`, or none at all (see
+ * `StoredUserLevel` for how "none" is recorded).
  */
 export const LESSON_LEVELS = [...USER_LEVELS, 'none'] as const;
 export const LessonLevelSchema = z.enum(LESSON_LEVELS);
@@ -43,6 +44,24 @@ export const LessonLevelsSchema = z
   .refine((levels) => !levels.includes('none') || levels.length === 1, {
     message: 'None cannot be combined with other levels',
   });
+
+/**
+ * What a `user_levels` row's `level` may hold: a tier, or `'none'` — the
+ * training team took the pilot's level away (roster chip, 2026-11-27). The
+ * table is append-only history, so clearing is a newer row rather than a
+ * delete, and the pilot reads exactly as one with no rows: no level (null).
+ * Never hand a stored value onward without `currentUserLevel`.
+ */
+export const STORED_USER_LEVELS = [...USER_LEVELS, 'none'] as const;
+export const StoredUserLevelSchema = z.enum(STORED_USER_LEVELS);
+export type StoredUserLevel = (typeof STORED_USER_LEVELS)[number];
+
+/** A stored level as the pilot's current level: `'none'` reads as no level. */
+export function currentUserLevel(
+  stored: StoredUserLevel | null | undefined,
+): UserLevel | null {
+  return stored == null || stored === 'none' ? null : stored;
+}
 
 /**
  * Where a `user_levels` row came from.

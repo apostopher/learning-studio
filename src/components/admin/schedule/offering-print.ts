@@ -57,7 +57,7 @@ export function offeringPrintHtml(input: OfferingPrintInput): string {
       : input.users
           .map(
             (user, index) =>
-              `<tr><td class="num">${index + 1}</td><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.email)}</td><td>${user.level ? LEVEL_LABELS[user.level] : 'Not set'}</td></tr>`,
+              `<tr><td class="num">${index + 1}</td><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.email)}</td><td>${user.level ? LEVEL_LABELS[user.level] : '–'}</td></tr>`,
           )
           .join('');
 

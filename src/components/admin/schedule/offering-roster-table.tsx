@@ -11,8 +11,8 @@ import { type ChipTone, chipClassName } from '#/components/ui/chip';
 import { IconButtonTooltip } from '#/components/ui/tooltip-icon-button';
 import { LEVEL_ACRONYMS, LEVEL_LABELS } from '#/lib/level-labels';
 import type { OfferingUser } from '#/lib/offering-schemas';
-import type { UserLevel } from '#/types';
-import { nextRosterLevel } from './roster-level';
+import { currentUserLevel, type UserLevel } from '#/types';
+import { nextRosterLevel, toRosterLevel } from './roster-level';
 
 /**
  * Rows the table shows before it scrolls. The popover's maximum size is
@@ -52,8 +52,10 @@ const PRESS_SPRING = { type: 'spring', duration: 0.25, bounce: 0.35 } as const;
 
 const levelTone = (level: UserLevel | null): ChipTone =>
   level ? LEVEL_TONES[level] : 'muted';
+// "–" rather than words (user, 2026-11-27): the column is headed 3D, and a
+// dash reads as "none" at a glance. The accessible name still says "No level".
 const levelText = (level: UserLevel | null) =>
-  level ? LEVEL_ACRONYMS[level] : 'No level';
+  level ? LEVEL_ACRONYMS[level] : '–';
 const levelName = (level: UserLevel | null) =>
   level ? LEVEL_LABELS[level] : 'No level';
 
@@ -108,7 +110,7 @@ const LevelCycleChip = ({
         label={
           disabled
             ? `${levelName(level)}. ${LOCKED_NOTE}`
-            : `${levelName(level)}. Press to make it ${LEVEL_LABELS[nextRosterLevel(level)]} — it saves when you stop pressing. Basic, Intermediate, Advanced, then back to Basic.`
+            : `${levelName(level)}. Press to make it ${levelName(currentUserLevel(nextRosterLevel(toRosterLevel(level))))} — it saves when you stop pressing. Basic, Intermediate, Advanced, no level, then back to Basic.`
         }
       />
     </Tooltip.Root>

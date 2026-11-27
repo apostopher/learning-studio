@@ -44,9 +44,9 @@ import {
   PersonaSchema,
   PilotLicensesSchema,
   ProfileVisibilitySchema,
+  StoredUserLevelSchema,
+  type StoredUserLevel,
   SubscriptionsSchema,
-  type UserLevel,
-  UserLevelSchema,
 } from '#/types';
 
 export * from './auth-schema';
@@ -1821,7 +1821,7 @@ export const userLevelsTable = pgTable(
     courseId: integer('course_id')
       .notNull()
       .references(() => coursesTable.id, { onDelete: 'cascade' }),
-    level: text('level').$type<UserLevel>().notNull(),
+    level: text('level').$type<StoredUserLevel>().notNull(),
     source: text('source').$type<LevelSource>().notNull(),
     /** Pilot-facing. Required when `source` is 'admin', null otherwise. */
     message: text('message'),
@@ -1857,7 +1857,7 @@ export const userLevelsTable = pgTable(
 );
 
 export const dbUserLevelSchema = createSelectSchema(userLevelsTable, {
-  level: UserLevelSchema,
+  level: StoredUserLevelSchema,
   source: LevelSourceSchema,
 });
 export type DBUserLevel = z.infer<typeof dbUserLevelSchema>;

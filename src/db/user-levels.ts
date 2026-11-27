@@ -1,12 +1,18 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import { type DBUserLevel, userLevelsTable } from '#/db/schema';
-import type { LevelSource, UserLevel } from '#/types';
+import {
+  currentUserLevel,
+  type LevelSource,
+  type StoredUserLevel,
+  type UserLevel,
+} from '#/types';
 
 export type InsertLevelRow = {
   userId: string;
   courseId: number;
-  level: UserLevel;
+  /** `'none'` takes the pilot's level away — see `StoredUserLevel`. */
+  level: StoredUserLevel;
   source: LevelSource;
   message?: string | null;
   note?: string | null;
@@ -15,7 +21,7 @@ export type InsertLevelRow = {
 
 /**
  * The pilot's level in one course — the newest row — or null when they have
- * no row at all.
+ * no row at all, or the newest one took their level away (`'none'`).
  *
  * Null, not a 'basic' fallback: under strict levels a pilot with no level sees
  * nothing in the course, and the roster shows them as "no level" from the same
@@ -37,7 +43,7 @@ export async function getCurrentLevel(
     )
     .orderBy(desc(userLevelsTable.createdAt), desc(userLevelsTable.id))
     .limit(1);
-  return row?.level ?? null;
+  return currentUserLevel(row?.level);
 }
 
 /**
@@ -55,13 +61,23 @@ export async function getCurrentLevel(
 export async function getCurrentLevelsByCourse(
   userId: string,
 ): Promise<Map<number, UserLevel>> {
-  const rows = await db.execute<{ course_id: number; level: UserLevel }>(sql`
+  const rows = await db.execute<{
+    course_id: number;
+    level: StoredUserLevel;
+  }>(sql`
     SELECT DISTINCT ON (course_id) course_id, level
     FROM user_levels
     WHERE user_id = ${userId}
     ORDER BY course_id, created_at DESC, id DESC
   `);
-  return new Map(rows.rows.map((row) => [row.course_id, row.level]));
+  // A course whose newest row took the level away (`'none'`) has no level:
+  // left out, exactly like a course with no rows.
+  const levels = new Map<number, UserLevel>();
+  for (const row of rows.rows) {
+    const level = currentUserLevel(row.level);
+    if (level !== null) levels.set(row.course_id, level);
+  }
+  return levels;
 }
 
 /** Full history for one (user, course), newest first. */
@@ -167,7 +183,7 @@ export async function insertEarnedLevelRow(input: {
 export async function getUnacknowledgedLevelChange(
   userId: string,
   courseId: number,
-): Promise<DBUserLevel | null> {
+): Promise<(DBUserLevel & { level: UserLevel }) | null> {
   const [row] = await db
     .select()
     .from(userLevelsTable)
@@ -181,8 +197,11 @@ export async function getUnacknowledgedLevelChange(
     .limit(1);
   if (!row) return null;
   if (row.source !== 'admin' && row.source !== 'earned') return null;
+  // Taking a level away is not announced: the pilot simply has no level, and
+  // the notice names the level they were moved to.
+  if (row.level === 'none') return null;
   if (row.acknowledgedAt !== null) return null;
-  return row;
+  return { ...row, level: row.level };
 }
 
 /** Stamp a row as seen. Scoped by userId so one pilot cannot dismiss another's. */

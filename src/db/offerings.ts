@@ -12,7 +12,11 @@ import type {
   OfferingUser,
   UpdateOfferingInput,
 } from '#/lib/offering-schemas';
-import type { UserLevel } from '#/types';
+import {
+  currentUserLevel,
+  type StoredUserLevel,
+  type UserLevel,
+} from '#/types';
 
 /**
  * Data access for offerings — dated runs of a course.
@@ -58,7 +62,11 @@ async function loadUsersByOffering(
     // `user_levels` is append-only history, so the current level is the NEWEST
     // row per (user, course) — a ranking rather than a filter, which is why
     // this is DISTINCT ON in raw SQL. Same shape as `listAdminUsers`.
-    db.execute<{ user_id: string; course_id: number; level: UserLevel }>(sql`
+    db.execute<{
+      user_id: string;
+      course_id: number;
+      level: StoredUserLevel;
+    }>(sql`
       SELECT DISTINCT ON (user_id, course_id) user_id, course_id, level
       FROM user_levels
       ORDER BY user_id, course_id, created_at DESC, id DESC
@@ -67,7 +75,11 @@ async function loadUsersByOffering(
 
   const levelByUserCourse = new Map<string, UserLevel>();
   for (const row of levelRows.rows) {
-    levelByUserCourse.set(`${row.user_id}:${row.course_id}`, row.level);
+    // Newest row took the level away (`'none'`): no level, like no rows.
+    const level = currentUserLevel(row.level);
+    if (level !== null) {
+      levelByUserCourse.set(`${row.user_id}:${row.course_id}`, level);
+    }
   }
 
   for (const row of rows) {
