@@ -677,7 +677,7 @@ describe('CourseSidebarWrapper', () => {
         within(locked)
           .getAllByRole('listitem')
           .map((li) => li.style.opacity),
-      ).toEqual(['1', '0']);
+      ).toEqual(['0.8', '0']);
       // Names only: nothing in it opens a module or a lesson.
       expect(within(locked).queryAllByRole('button')).toEqual([]);
       expect(within(locked).queryAllByRole('link')).toEqual([]);

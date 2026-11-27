@@ -1,9 +1,13 @@
 /**
- * Row `index` of `count`: 1 for the first, falling evenly to 0 for the last.
- * A lone row sits halfway, so it still reads as faded.
+ * Row `index` of `count`: 0.8 for the first (user, 2026-11-27), falling
+ * evenly to 0 for the last. A lone row sits halfway, so it still reads as
+ * faded.
  */
+const FIRST_ROW_OPACITY = 0.8;
 export const rowOpacity = (index: number, count: number): number =>
-  count <= 1 ? 0.5 : 1 - index / (count - 1);
+  count <= 1
+    ? FIRST_ROW_OPACITY / 2
+    : FIRST_ROW_OPACITY * (1 - index / (count - 1));
 
 type LockedModulePreviewProps = {
   modules: readonly { slug: string; name: string }[];
