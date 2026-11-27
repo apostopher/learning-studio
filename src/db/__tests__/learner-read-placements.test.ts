@@ -231,6 +231,12 @@ vi.mock('#/db/user-levels', () => ({
   getCurrentLevelsByCourse: vi.fn().mockResolvedValue(new Map()),
   getCurrentLevel: vi.fn().mockResolvedValue('basic'),
 }));
+// The schedule decides who takes a course (2026-11-27): the roster lookup
+// is its own module, stubbed here like the other db helpers.
+vi.mock('#/db/course-roster-access', () => ({
+  rosteredCourseIds: () => ({}),
+  getRosteredCourseSlugs: async () => [],
+}));
 vi.mock('#/db/course-staff', () => ({
   getStaffCourseIds: vi.fn().mockResolvedValue(new Set()),
   getStaffCourseSlugs: vi.fn().mockResolvedValue([]),
@@ -522,14 +528,10 @@ describe('an empty/all-WIP module still yields its row (sites 2-4 LEFT-join rule
 
     await getMyCourses('u1');
 
-    // The single innerJoin is courses-onto-subscriptions — every downstream
-    // hop (modules, module_lessons, lessons, and the two progress tables not
-    // pinned by this test) must be a LEFT join, never inner.
-    expect(calls.innerJoin).toHaveLength(1);
-    expect(calls.innerJoin[0][0]).toBe(coursesTable);
-    expect(render(calls.innerJoin[0][1])).toBe(
-      '"courses"."id" = "course_subscriptions"."course_id"',
-    );
+    // FROM courses, narrowed to the user's rostered courses in the WHERE
+    // (2026-11-27). Every hop (modules, module_lessons, lessons, and the two
+    // progress tables not pinned by this test) is a LEFT join, never inner.
+    expect(calls.innerJoin).toHaveLength(0);
 
     // First four leftJoins, by FIXED index rather than `indexOf` — proves
     // the placement table and then modules are joined (and LEFT, not inner)

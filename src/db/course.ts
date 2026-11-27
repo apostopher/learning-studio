@@ -10,6 +10,10 @@ import { getUserRoleNames } from '#/db/admin';
 import { getLastViewedLessonIdsByCourse } from '#/db/course-last-viewed-batch';
 import { isPinnedSnapshot, isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
+import {
+  getRosteredCourseSlugs,
+  rosteredCourseIds,
+} from '#/db/course-roster-access';
 import { getStaffCourseIds, getStaffCourseSlugs } from '#/db/course-staff';
 import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
@@ -30,7 +34,6 @@ import type { DBLesson, DBModule } from '@/db/schema';
 import {
   courseLessonVersionsTable,
   courseModulesTable,
-  courseSubscriptionsTable,
   coursesTable,
   lessonMaterialProgressTable,
   lessonsTable,
@@ -396,11 +399,9 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
       watchedHits: countDistinct(videoProgressTable.progress),
       ...progressComponentColumns(userId),
     })
-    .from(courseSubscriptionsTable)
-    .innerJoin(
-      coursesTable,
-      eq(coursesTable.id, courseSubscriptionsTable.courseId),
-    )
+    // The courses the user is on an offering of — the schedule decides, not
+    // enrolment (user, 2026-11-27; `#/db/course-roster-access`).
+    .from(coursesTable)
     // Membership is the placement table, joined through — see
     // getCourseDetails. LEFT, so a subscribed course with zero placements
     // still appears at 0%.
@@ -449,7 +450,7 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
         eq(lessonMaterialProgressTable.lessonSlug, lessonsTable.slug),
       ),
     )
-    .where(eq(courseSubscriptionsTable.userId, userId))
+    .where(inArray(coursesTable.id, rosteredCourseIds(userId)))
     .groupBy(
       coursesTable.id,
       coursesTable.name,
@@ -628,19 +629,20 @@ export async function getMyCourses(userId: string): Promise<MyCourseSummary[]> {
 export async function getSubscribedCourseSlugs(
   userId: string,
 ): Promise<string[]> {
-  const [subscribed, staffed] = await Promise.all([
-    db
-      .select({ slug: coursesTable.slug })
-      .from(courseSubscriptionsTable)
-      .innerJoin(
-        coursesTable,
-        eq(coursesTable.id, courseSubscriptionsTable.courseId),
-      )
-      .where(eq(courseSubscriptionsTable.userId, userId))
-      .orderBy(asc(coursesTable.name)),
+  const [rostered, staffed, roles] = await Promise.all([
+    getRosteredCourseSlugs(userId),
     getStaffCourseSlugs(userId),
+    getUserRoleNames(userId),
   ]);
-  return [...new Set([...subscribed.map((r) => r.slug), ...staffed])];
+  // An org owner/admin opens any course, as `/api/course/details` already
+  // lets them: with the schedule deciding (2026-11-27) they are no longer
+  // enrolled into courses to preview them, and /app lists only what they are
+  // rostered on.
+  if (hasAdminAccess(roles)) {
+    const all = await db.select({ slug: coursesTable.slug }).from(coursesTable);
+    return all.map((r) => r.slug);
+  }
+  return [...new Set([...rostered, ...staffed])];
 }
 
 /**

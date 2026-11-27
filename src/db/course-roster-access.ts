@@ -1,0 +1,111 @@
+import { and, eq } from 'drizzle-orm';
+import { db } from '#/db';
+import { coursesTable, offeringsTable, offeringUsersTable } from '#/db/schema';
+
+/**
+ * Who may take a course: the people on any of its offerings, whatever the
+ * offering's dates (user, 2026-11-27). The schedule decides, for students and
+ * staff alike; `course_subscriptions` (enrolment) no longer grants a course.
+ * Staff still reach the courses they author through their own bypasses
+ * (`getSubscribedCourseSlugs`, `viewingAsAuthor`).
+ *
+ * This is the one definition: /app's list, the course route's guard and every
+ * per-request access check read it, so they cannot disagree.
+ */
+
+/** Ids of the courses the user is on an offering of, as a subquery. */
+export function rosteredCourseIds(userId: string) {
+  return db
+    .selectDistinct({ courseId: offeringsTable.courseId })
+    .from(offeringUsersTable)
+    .innerJoin(
+      offeringsTable,
+      eq(offeringsTable.id, offeringUsersTable.offeringId),
+    )
+    .where(eq(offeringUsersTable.userId, userId));
+}
+
+/** Whether the user is on any offering of this course. */
+export async function isOnCourseRoster(
+  userId: string,
+  courseId: number,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: offeringUsersTable.id })
+    .from(offeringUsersTable)
+    .innerJoin(
+      offeringsTable,
+      eq(offeringsTable.id, offeringUsersTable.offeringId),
+    )
+    .where(
+      and(
+        eq(offeringUsersTable.userId, userId),
+        eq(offeringsTable.courseId, courseId),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** Whether the user is on any offering of the course with this slug. */
+export async function isOnCourseRosterBySlug(
+  userId: string,
+  courseSlug: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: offeringUsersTable.id })
+    .from(offeringUsersTable)
+    .innerJoin(
+      offeringsTable,
+      eq(offeringsTable.id, offeringUsersTable.offeringId),
+    )
+    .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
+    .where(
+      and(
+        eq(offeringUsersTable.userId, userId),
+        eq(coursesTable.slug, courseSlug),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** Slugs of the courses the user is on an offering of. */
+export async function getRosteredCourseSlugs(
+  userId: string,
+): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ slug: coursesTable.slug })
+    .from(offeringUsersTable)
+    .innerJoin(
+      offeringsTable,
+      eq(offeringsTable.id, offeringUsersTable.offeringId),
+    )
+    .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
+    .where(eq(offeringUsersTable.userId, userId));
+  return rows.map((r) => r.slug);
+}
+
+/** The windows of every offering of this course the user is on. */
+export async function getMyOfferingWindows(
+  userId: string,
+  courseSlug: string,
+): Promise<{ startsOn: string; endsOn: string }[]> {
+  return db
+    .select({
+      startsOn: offeringsTable.startsOn,
+      endsOn: offeringsTable.endsOn,
+    })
+    .from(offeringUsersTable)
+    .innerJoin(
+      offeringsTable,
+      eq(offeringsTable.id, offeringUsersTable.offeringId),
+    )
+    .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
+    .where(
+      and(
+        eq(offeringUsersTable.userId, userId),
+        eq(coursesTable.slug, courseSlug),
+      ),
+    );
+}

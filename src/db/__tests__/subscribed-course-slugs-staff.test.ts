@@ -22,6 +22,8 @@ const dbState = vi.hoisted(() => ({ rows: [] as unknown[] }));
 const m = vi.hoisted(() => ({
   getStaffCourseSlugs: vi.fn(),
   getStaffCourseIds: vi.fn(),
+  getRosteredCourseSlugs: vi.fn(),
+  getUserRoleNames: vi.fn(),
 }));
 
 vi.mock('#/db', () => {
@@ -32,6 +34,8 @@ vi.mock('#/db', () => {
     where: () => chain,
     groupBy: () => chain,
     orderBy: () => Promise.resolve(dbState.rows),
+    // `await db.select().from(courses)` — every course, for an admin.
+    then: (resolve: (rows: unknown[]) => unknown) => resolve(dbState.rows),
   };
   return { db: { select: () => chain } };
 });
@@ -51,7 +55,11 @@ vi.mock('@/db/schema', () => ({
 vi.mock('@/integrations/upstash/redis', () => ({
   cacheWithRedis: (_prefix: string, fn: unknown) => fn,
 }));
-vi.mock('#/db/admin', () => ({ getUserRoleNames: vi.fn() }));
+vi.mock('#/db/admin', () => ({ getUserRoleNames: m.getUserRoleNames }));
+vi.mock('#/db/course-roster-access', () => ({
+  rosteredCourseIds: () => ({}),
+  getRosteredCourseSlugs: m.getRosteredCourseSlugs,
+}));
 vi.mock('#/db/course-last-viewed-batch', () => ({
   getLastViewedLessonIdsByCourse: vi.fn(),
 }));
@@ -70,8 +78,15 @@ import { getSubscribedCourseSlugs } from '#/db/course';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  dbState.rows = [{ slug: 'enrolled-course' }];
+  // Every course in the org — what an owner/admin is let into.
+  dbState.rows = [
+    { slug: 'enrolled-course' },
+    { slug: 'staffed-course' },
+    { slug: 'other-course' },
+  ];
   m.getStaffCourseSlugs.mockResolvedValue([]);
+  m.getRosteredCourseSlugs.mockResolvedValue(['enrolled-course']);
+  m.getUserRoleNames.mockResolvedValue([]);
 });
 
 describe('getSubscribedCourseSlugs — course staff', () => {
@@ -112,5 +127,23 @@ describe('getSubscribedCourseSlugs — course staff', () => {
     await getSubscribedCourseSlugs('u1');
 
     expect(m.getStaffCourseSlugs).toHaveBeenCalledWith('u1');
+  });
+
+  it('asks for the rostered slugs of the session user', async () => {
+    await getSubscribedCourseSlugs('u1');
+
+    expect(m.getRosteredCourseSlugs).toHaveBeenCalledWith('u1');
+  });
+
+  it('lets an owner or admin into every course, rostered or not', async () => {
+    m.getUserRoleNames.mockResolvedValue(['owner']);
+
+    const slugs = await getSubscribedCourseSlugs('u1');
+
+    expect(slugs).toEqual([
+      'enrolled-course',
+      'staffed-course',
+      'other-course',
+    ]);
   });
 });

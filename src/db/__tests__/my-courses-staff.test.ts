@@ -70,6 +70,12 @@ vi.mock('#/db/course-last-viewed-batch', () => ({
 vi.mock('#/db/user-levels', () => ({
   getCurrentLevelsByCourse: m.getCurrentLevelsByCourse,
 }));
+// The schedule decides who takes a course (2026-11-27): the roster lookup
+// is its own module, stubbed here like the other db helpers.
+vi.mock('#/db/course-roster-access', () => ({
+  rosteredCourseIds: () => ({}),
+  getRosteredCourseSlugs: async () => [],
+}));
 vi.mock('#/db/course-staff', () => ({
   getStaffCourseIds: m.getStaffCourseIds,
   // course.ts imports this for `getSubscribedCourseSlugs`; unused here, but a

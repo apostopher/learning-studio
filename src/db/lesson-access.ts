@@ -2,13 +2,16 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '#/db';
 import { isPinOf } from '#/db/course-lesson-content';
 import { courseModuleIds } from '#/db/course-modules';
+import {
+  isOnCourseRoster,
+  isOnCourseRosterBySlug,
+} from '#/db/course-roster-access';
 import type { Tx } from '#/db/lesson-versions';
 import { lessonVisible } from '#/db/lesson-visible-sql';
 import {
   courseLessonVersionsTable,
   courseModulesTable,
   courseOrgsTable,
-  courseSubscriptionsTable,
   coursesTable,
   lessonsTable,
   moduleLessonsTable,
@@ -197,51 +200,24 @@ export async function getCourseSlugForCourseId(
   return row?.courseSlug ?? null;
 }
 
-/** Whether the user holds a subscription row for the course. */
+/**
+ * Whether the user may take the course: they are on one of its offerings
+ * (`#/db/course-roster-access`). The name predates the schedule deciding;
+ * enrolment rows no longer count (user, 2026-11-27).
+ */
 export async function isSubscribedToCourse(
   userId: string,
   courseId: number,
 ): Promise<boolean> {
-  const rows = await db
-    .select({ id: courseSubscriptionsTable.id })
-    .from(courseSubscriptionsTable)
-    .where(
-      and(
-        eq(courseSubscriptionsTable.userId, userId),
-        eq(courseSubscriptionsTable.courseId, courseId),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
+  return isOnCourseRoster(userId, courseId);
 }
 
-/**
- * Whether the user holds a subscription for the course with this slug.
- *
- * A second small query (joined by slug) rather than a slug→id round trip
- * through `isSubscribedToCourse` — callers here (`getCourseContentForAgent`)
- * only ever have the slug, not the id, so this reads cleaner than resolving
- * one first.
- */
+/** `isSubscribedToCourse`, for a caller that has only the slug. */
 export async function isSubscribedToCourseSlug(
   userId: string,
   courseSlug: string,
 ): Promise<boolean> {
-  const rows = await db
-    .select({ id: courseSubscriptionsTable.id })
-    .from(courseSubscriptionsTable)
-    .innerJoin(
-      coursesTable,
-      eq(coursesTable.id, courseSubscriptionsTable.courseId),
-    )
-    .where(
-      and(
-        eq(courseSubscriptionsTable.userId, userId),
-        eq(coursesTable.slug, courseSlug),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
+  return isOnCourseRosterBySlug(userId, courseSlug);
 }
 
 /**

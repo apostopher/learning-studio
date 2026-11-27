@@ -66,6 +66,12 @@ vi.mock('#/db/user-levels', () => ({
   getCurrentLevelsByCourse: vi.fn().mockResolvedValue(new Map()),
   getCurrentLevel: vi.fn().mockResolvedValue('basic'),
 }));
+// The schedule decides who takes a course (2026-11-27): the roster lookup
+// is its own module, stubbed here like the other db helpers.
+vi.mock('#/db/course-roster-access', () => ({
+  rosteredCourseIds: () => ({}),
+  getRosteredCourseSlugs: async () => [],
+}));
 vi.mock('#/db/course-staff', () => ({
   getStaffCourseIds: vi.fn().mockResolvedValue(new Set()),
   getStaffCourseSlugs: vi.fn().mockResolvedValue([]),
@@ -220,20 +226,21 @@ describe('getCourseDetails', () => {
 
 describe('getMyCourses', () => {
   /**
-   * Join order: [0] courses INNER on subscriptions, [1] course_modules LEFT
-   * on the course, [2] modules LEFT on the placement's module id, then
+   * Join order: FROM courses (narrowed to the user's rostered courses in the
+   * WHERE), [0] course_modules LEFT on the course, [1] modules LEFT on the
+   * placement's module id, then
    * module_lessons/lessons as before. ORDER BY [2] is the placement's rank —
    * the mutant keeps `asc(modules.rank)` after switching the join.
    */
   it('joins through course_modules and orders by the placement rank', async () => {
     await getMyCourses('u1');
 
-    expect(cap.captured.joins[1]).toBe(courseModulesTable);
-    expect(renderSql(cap.captured.joinOn[1] as SQL)).toBe(
+    expect(cap.captured.joins[0]).toBe(courseModulesTable);
+    expect(renderSql(cap.captured.joinOn[0] as SQL)).toBe(
       '"course_modules"."course_id" = "courses"."id"',
     );
-    expect(cap.captured.joins[2]).toBe(modulesTable);
-    expect(renderSql(cap.captured.joinOn[2] as SQL)).toBe(
+    expect(cap.captured.joins[1]).toBe(modulesTable);
+    expect(renderSql(cap.captured.joinOn[1] as SQL)).toBe(
       '"modules"."id" = "course_modules"."module_id"',
     );
     expect(renderSql(cap.captured.orderBy[2] as SQL)).toBe(
