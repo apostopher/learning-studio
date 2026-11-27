@@ -18,6 +18,7 @@ const m = vi.hoisted(() => {
     updateOffering: vi.fn(),
     deleteOffering: vi.fn(),
     getSession: vi.fn(),
+    getCourseSlugForCourseId: vi.fn(),
   };
 });
 vi.mock('#/lib/admin-functions.server', () => ({
@@ -33,6 +34,9 @@ vi.mock('#/db/offerings', () => ({
   createOffering: m.createOffering,
   updateOffering: m.updateOffering,
   deleteOffering: m.deleteOffering,
+}));
+vi.mock('#/db/lesson-access', () => ({
+  getCourseSlugForCourseId: m.getCourseSlugForCourseId,
 }));
 vi.mock('#/lib/auth', () => ({
   auth: { api: { getSession: m.getSession } },
@@ -85,6 +89,7 @@ beforeEach(() => {
   m.updateOffering.mockResolvedValue(OFFERING);
   m.deleteOffering.mockResolvedValue(true);
   m.getSession.mockResolvedValue({ user: { id: 'actor-1' } });
+  m.getCourseSlugForCourseId.mockResolvedValue('itps-2-week');
 });
 
 describe('GET /api/admin/offerings', () => {
@@ -174,6 +179,16 @@ describe('POST /api/admin/offerings', () => {
       expect.objectContaining({ courseId: 10, endsOn: '2026-09-20' }),
       'actor-1',
     );
+  });
+
+  it('refuses to schedule 3D Airmanship, and writes nothing', async () => {
+    m.requireCourseCreation.mockResolvedValue(undefined);
+    m.getCourseSlugForCourseId.mockResolvedValue('3d-airmanship');
+
+    const res = await createOfferingHandler(postReq(VALID_CREATE));
+
+    expect(res.status).toBe(422);
+    expect(m.createOffering).not.toHaveBeenCalled();
   });
 
   it('refuses anyone the write guard refuses, and writes nothing', async () => {

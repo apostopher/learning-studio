@@ -114,3 +114,13 @@ export function flagshipRailNote(
     ? `Includes all ${flagship.name} modules`
     : `Not yet linked to ${flagship.name} modules`;
 }
+
+/**
+ * Whether a course can be put on the schedule. Never 3D Airmanship (user,
+ * 2026-11-27): it is not a course anyone takes, only the library inside every
+ * other course. The schedule's rail leaves it out, its offerings are not
+ * listed, and creating one is refused.
+ */
+export function isSchedulableCourse(slug: string): boolean {
+  return slug !== FLAGSHIP_COURSE_SLUG;
+}

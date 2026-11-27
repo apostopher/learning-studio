@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 // `#/` not `@/`: vitest cannot resolve the `@/` alias, and this module is
 // imported directly by its route test.
+import { getCourseSlugForCourseId } from '#/db/lesson-access';
 import { createOffering, listOfferings } from '#/db/offerings';
 import { ForbiddenError } from '#/lib/admin-functions.server';
 import { auth } from '#/lib/auth';
+import { isSchedulableCourse } from '#/lib/flagship-course';
 import {
   calendarDaySchema,
   createOfferingInputSchema,
@@ -126,6 +128,17 @@ export async function createOfferingHandler(
   const parsed = createOfferingInputSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const slug = await getCourseSlugForCourseId(parsed.data.courseId);
+  if (slug !== null && !isSchedulableCourse(slug)) {
+    return Response.json(
+      {
+        error:
+          '3D Airmanship is not scheduled: it is part of every other course.',
+      },
+      { status: 422 },
+    );
   }
 
   const actorId = await actingUserId(request.headers);

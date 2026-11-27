@@ -1,6 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '#/db';
 import { coursesTable, offeringsTable, offeringUsersTable } from '#/db/schema';
+import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 
 /**
  * Who may take a course: the people on any of its offerings, whatever the
@@ -11,7 +12,13 @@ import { coursesTable, offeringsTable, offeringUsersTable } from '#/db/schema';
  *
  * This is the one definition: /app's list, the course route's guard and every
  * per-request access check read it, so they cannot disagree.
+ *
+ * Never the 3D Airmanship course (user, 2026-11-27): it is not a course a
+ * pilot takes, only the library remixed into every other course. An old
+ * offering of it grants nothing; its modules reach pilots inside the courses
+ * that borrow them.
  */
+const notFlagship = () => ne(coursesTable.slug, FLAGSHIP_COURSE_SLUG);
 
 /** Ids of the courses the user is on an offering of, as a subquery. */
 export function rosteredCourseIds(userId: string) {
@@ -22,7 +29,8 @@ export function rosteredCourseIds(userId: string) {
       offeringsTable,
       eq(offeringsTable.id, offeringUsersTable.offeringId),
     )
-    .where(eq(offeringUsersTable.userId, userId));
+    .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
+    .where(and(eq(offeringUsersTable.userId, userId), notFlagship()));
 }
 
 /** Whether the user is on any offering of this course. */
@@ -37,10 +45,12 @@ export async function isOnCourseRoster(
       offeringsTable,
       eq(offeringsTable.id, offeringUsersTable.offeringId),
     )
+    .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
     .where(
       and(
         eq(offeringUsersTable.userId, userId),
         eq(offeringsTable.courseId, courseId),
+        notFlagship(),
       ),
     )
     .limit(1);
@@ -64,6 +74,7 @@ export async function isOnCourseRosterBySlug(
       and(
         eq(offeringUsersTable.userId, userId),
         eq(coursesTable.slug, courseSlug),
+        notFlagship(),
       ),
     )
     .limit(1);
@@ -82,7 +93,7 @@ export async function getRosteredCourseSlugs(
       eq(offeringsTable.id, offeringUsersTable.offeringId),
     )
     .innerJoin(coursesTable, eq(coursesTable.id, offeringsTable.courseId))
-    .where(eq(offeringUsersTable.userId, userId));
+    .where(and(eq(offeringUsersTable.userId, userId), notFlagship()));
   return rows.map((r) => r.slug);
 }
 
@@ -106,6 +117,7 @@ export async function getMyOfferingWindows(
       and(
         eq(offeringUsersTable.userId, userId),
         eq(coursesTable.slug, courseSlug),
+        notFlagship(),
       ),
     );
 }

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import { db } from '#/db';
 import {
   coursesTable,
@@ -6,6 +6,7 @@ import {
   offeringUsersTable,
   userProfileTable,
 } from '#/db/schema';
+import { FLAGSHIP_COURSE_SLUG } from '#/lib/flagship-course';
 import type {
   CreateOfferingInput,
   Offering,
@@ -154,6 +155,9 @@ export async function listOfferings({
         lte(offeringsTable.startsOn, windowEnd),
         gte(offeringsTable.endsOn, windowStart),
         courseIds ? inArray(offeringsTable.courseId, courseIds) : undefined,
+        // 3D Airmanship is never scheduled (`isSchedulableCourse`); an old
+        // offering of it stays in the table but is not shown.
+        ne(coursesTable.slug, FLAGSHIP_COURSE_SLUG),
       ),
     )
     .orderBy(offeringsTable.startsOn, offeringsTable.id);

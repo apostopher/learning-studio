@@ -32,6 +32,7 @@ import {
 } from '#/components/calendar';
 import { useAdminCourses } from '#/data-hooks/use-admin-courses';
 import { useOfferings } from '#/data-hooks/use-offerings';
+import { isSchedulableCourse } from '#/lib/flagship-course';
 import type { Offering } from '#/lib/offering-schemas';
 import { coursePassMarkSlot } from './course-pass-mark-slot';
 import { CourseScheduleRail } from './course-schedule-rail';
@@ -261,6 +262,10 @@ export const SchedulePageContainer = ({
   const to = format(addDays(weekStart, SCHEDULE_WEEKS * 7 - 1), 'yyyy-MM-dd');
 
   const courses = useAdminCourses();
+  // 3D Airmanship is never scheduled — see `isSchedulableCourse`.
+  const railCourses = courses.data?.filter((course) =>
+    isSchedulableCourse(course.slug),
+  );
   const offerings = useOfferings(from, to);
 
   const sensors = useSensors(
@@ -366,13 +371,13 @@ export const SchedulePageContainer = ({
                 {courses.error.message}
               </p>
             )}
-            {courses.data?.length === 0 && (
+            {railCourses?.length === 0 && (
               <p className="px-1 text-secondary text-sm">
                 No courses yet. Create one from the Courses screen, then come
                 back to schedule it.
               </p>
             )}
-            {courses.data?.map((course) =>
+            {railCourses?.map((course) =>
               canSchedule ? (
                 <DraggableCourseContainer
                   key={course.id}
