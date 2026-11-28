@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
+import { hasViperAccess, viperRefusal } from '#/db/viper-access';
 import { auth } from '#/lib/auth';
 import { advanceOnboarding } from '#/lib/onboarding-session.server';
 
@@ -27,6 +28,10 @@ export async function startOnboardingHandler(
   if (!session) {
     return new Response('Unauthorized', { status: 401 });
   }
+
+  // Viper is a paid feature: a free student is refused here as well as
+  // having no bubble to open (`hasViperAccess`).
+  if (!(await hasViperAccess(session.user.id))) return viperRefusal();
 
   let raw: unknown;
   try {

@@ -22,6 +22,13 @@ const m = vi.hoisted(() => ({
 }));
 vi.mock('#/env', () => ({ env: m.envMock }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession: m.getSession } } }));
+// Viper is a paid feature: allowed unless a test says otherwise.
+const viper = vi.hoisted(() => ({ hasViperAccess: vi.fn() }));
+vi.mock('#/db/viper-access', () => ({
+  hasViperAccess: viper.hasViperAccess,
+  viperRefusal: () =>
+    Response.json({ code: 'VIPER_NOT_IN_PLAN' }, { status: 403 }),
+}));
 vi.mock('#/db/chat', () => ({ ensureChat: m.ensureChat }));
 vi.mock('#/lib/tavus.server', () => ({
   createConversation: m.createConversation,
@@ -74,6 +81,7 @@ const get = (url: string) => new Request(`http://t${url}`);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  viper.hasViperAccess.mockResolvedValue(true);
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   m.envMock.TAVUS_PERSONA_ID = 'p1';
@@ -372,5 +380,16 @@ describe('POST /api/video-call/:id/end', () => {
       endReason: 'time_limit',
       durationSeconds: 600,
     });
+  });
+});
+
+describe('startVideoCallHandler for a free student', () => {
+  it('403s without starting a call', async () => {
+    viper.hasViperAccess.mockResolvedValueOnce(false);
+    const res = await startVideoCallHandler(
+      post('/api/video-call', { chatId: 'chat-1', courseSlug: 'ppl' }),
+    );
+    expect(res.status).toBe(403);
+    expect(m.createConversation).not.toHaveBeenCalled();
   });
 });

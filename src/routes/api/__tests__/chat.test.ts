@@ -32,6 +32,13 @@ vi.mock('#/ai/compact-chat', () => ({
   shouldCompact: (n?: number) => (n ?? 0) > 100,
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
+// Viper is a paid feature: allowed unless a test says otherwise.
+const viper = vi.hoisted(() => ({ hasViperAccess: vi.fn() }));
+vi.mock('#/db/viper-access', () => ({
+  hasViperAccess: viper.hasViperAccess,
+  viperRefusal: () =>
+    Response.json({ code: 'VIPER_NOT_IN_PLAN' }, { status: 403 }),
+}));
 vi.mock('#/ai/chat', () => ({ buildChatStream, isAssociateFrom: () => false }));
 // Mocked rather than left real because the module reaches `#/db/schema`
 // transitively (whose `@/types` value import can't resolve under vitest).
@@ -59,6 +66,7 @@ function postReq(body: unknown): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  viper.hasViperAccess.mockResolvedValue(true);
   getSession.mockResolvedValue({ user: { id: 'u1', name: 'R' } });
   resolvePersonaForChat.mockResolvedValue({
     content: { basicInfo: 'published' },
@@ -633,5 +641,20 @@ describe('chatHandler — open debrief questions', () => {
     expect(buildChatStream).toHaveBeenCalledWith(
       expect.objectContaining({ openDebriefQuestions: [Q] }),
     );
+  });
+});
+
+describe('chatHandler for a free student', () => {
+  it('403s before building a reply: Viper is a paid feature', async () => {
+    viper.hasViperAccess.mockResolvedValueOnce(false);
+    const res = await chatHandler(
+      postReq({
+        messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(viper.hasViperAccess).toHaveBeenCalledWith('u1');
+    expect(buildChatStream).not.toHaveBeenCalled();
+    expect(ensureChat).not.toHaveBeenCalled();
   });
 });

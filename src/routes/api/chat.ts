@@ -11,6 +11,7 @@ import { compactChat, shouldCompact } from '#/ai/compact-chat';
 import { appendMessages, ensureChat, loadChatContext } from '#/db/chat';
 import { resolvePersonaForChat } from '#/db/course-orgs';
 import { findRecentDebriefGaps } from '#/db/debrief-gaps';
+import { hasViperAccess, viperRefusal } from '#/db/viper-access';
 import { getActiveOrgId } from '#/lib/active-org.server';
 import { auth } from '#/lib/auth';
 import { HISTORY_HARD_CAP } from '#/lib/chat-history';
@@ -83,6 +84,10 @@ export async function chatHandler(request: Request): Promise<Response> {
   if (!session) {
     return new Response('Unauthorized', { status: 401 });
   }
+
+  // Viper is a paid feature: a free student is refused here as well as
+  // having no bubble to open (`hasViperAccess`).
+  if (!(await hasViperAccess(session.user.id))) return viperRefusal();
 
   let body: unknown;
   try {

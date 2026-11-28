@@ -3,6 +3,7 @@ import { addSeconds } from 'date-fns';
 import { VIDEO_CALL_GREETING } from '#/ai/prompts/voice-mode';
 import { ensureChat } from '#/db/chat';
 import { insertActiveCall } from '#/db/video-calls';
+import { hasViperAccess, viperRefusal } from '#/db/viper-access';
 import { env } from '#/env';
 import { auth } from '#/lib/auth';
 import { createConversation, endConversation } from '#/lib/tavus.server';
@@ -25,6 +26,10 @@ export async function startVideoCallHandler(
 ): Promise<Response> {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) return new Response('Unauthorized', { status: 401 });
+
+  // Viper is a paid feature: a free student is refused here as well as
+  // having no bubble to open (`hasViperAccess`).
+  if (!(await hasViperAccess(session.user.id))) return viperRefusal();
 
   let body: unknown = {};
   try {

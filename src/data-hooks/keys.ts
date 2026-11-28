@@ -120,6 +120,7 @@ export const dataKeys = {
   myLevel: (courseSlug: string) => ['user', 'my-level', courseSlug] as const,
   myOffering: (courseSlug: string) =>
     ['user', 'my-offering', courseSlug] as const,
+  viperAccess: () => ['user', 'viper-access'] as const,
   /** Every course's progress summary: the prefix of the key below. */
   allCourseProgressSummaries: () => ['course', 'progress-summary'] as const,
   courseProgressSummary: (slug: string) =>

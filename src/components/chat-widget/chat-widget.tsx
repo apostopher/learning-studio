@@ -14,6 +14,7 @@ import { useChatWidget } from '#/components/chat-widget/use-chat-widget';
 import { SkaProfileCardContainer } from '#/components/ska-profile/ska-profile-card-container';
 import { useVideoCallController } from '#/components/video-call/use-video-call-controller';
 import { useOnboardingChat } from '#/data-hooks/use-onboarding-chat';
+import { useViperAccess } from '#/data-hooks/use-viper-access';
 import { authClient } from '#/lib/auth-client';
 import { cn } from '#/lib/cn';
 
@@ -259,7 +260,12 @@ export function ChatWidget() {
   const { data: session } = authClient.useSession();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  const hidden = !session || pathname.startsWith('/admin');
+  // Viper is a paid feature: a free student gets no bubble, no window and no
+  // onboarding. Hidden until the answer is in, so it never flashes up and
+  // vanishes; the endpoints refuse them on the same rule regardless.
+  const viperAccess = useViperAccess(Boolean(session));
+  const hidden =
+    !session || pathname.startsWith('/admin') || viperAccess.data !== true;
 
   const toggleFontSize = () =>
     setFontSize((current) => (current === 16 ? 18 : 16));

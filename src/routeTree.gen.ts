@@ -56,6 +56,7 @@ import { Route as ApiUserMyOfferingRouteImport } from './routes/api/user/my-offe
 import { Route as ApiUserReportVideoProgressRouteImport } from './routes/api/user/report-video-progress'
 import { Route as ApiUserVideoPositionRouteImport } from './routes/api/user/video-position'
 import { Route as ApiUserVideoProgressRouteImport } from './routes/api/user/video-progress'
+import { Route as ApiUserViperAccessRouteImport } from './routes/api/user/viper-access'
 import { Route as ApiVideoCallIdRouteImport } from './routes/api/video-call.$id'
 import { Route as ApiVideoCallAllowanceRouteImport } from './routes/api/video-call.allowance'
 import { Route as AuthedAdminCourseIdEditorRouteImport } from './routes/_authed/admin.$courseId.editor'
@@ -363,6 +364,11 @@ const ApiUserVideoPositionRoute = ApiUserVideoPositionRouteImport.update({
 const ApiUserVideoProgressRoute = ApiUserVideoProgressRouteImport.update({
   id: '/api/user/video-progress',
   path: '/api/user/video-progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUserViperAccessRoute = ApiUserViperAccessRouteImport.update({
+  id: '/api/user/viper-access',
+  path: '/api/user/viper-access',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiVideoCallIdRoute = ApiVideoCallIdRouteImport.update({
@@ -822,6 +828,7 @@ export interface FileRoutesByFullPath {
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-position': typeof ApiUserVideoPositionRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
+  '/api/user/viper-access': typeof ApiUserViperAccessRoute
   '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
   '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
   '/admin/': typeof AuthedAdminIndexRoute
@@ -939,6 +946,7 @@ export interface FileRoutesByTo {
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-position': typeof ApiUserVideoPositionRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
+  '/api/user/viper-access': typeof ApiUserViperAccessRoute
   '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
   '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
   '/admin': typeof AuthedAdminIndexRoute
@@ -1060,6 +1068,7 @@ export interface FileRoutesById {
   '/api/user/report-video-progress': typeof ApiUserReportVideoProgressRoute
   '/api/user/video-position': typeof ApiUserVideoPositionRoute
   '/api/user/video-progress': typeof ApiUserVideoProgressRoute
+  '/api/user/viper-access': typeof ApiUserViperAccessRoute
   '/api/video-call/$id': typeof ApiVideoCallIdRouteWithChildren
   '/api/video-call/allowance': typeof ApiVideoCallAllowanceRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
@@ -1181,6 +1190,7 @@ export interface FileRouteTypes {
     | '/api/user/report-video-progress'
     | '/api/user/video-position'
     | '/api/user/video-progress'
+    | '/api/user/viper-access'
     | '/api/video-call/$id'
     | '/api/video-call/allowance'
     | '/admin/'
@@ -1298,6 +1308,7 @@ export interface FileRouteTypes {
     | '/api/user/report-video-progress'
     | '/api/user/video-position'
     | '/api/user/video-progress'
+    | '/api/user/viper-access'
     | '/api/video-call/$id'
     | '/api/video-call/allowance'
     | '/admin'
@@ -1418,6 +1429,7 @@ export interface FileRouteTypes {
     | '/api/user/report-video-progress'
     | '/api/user/video-position'
     | '/api/user/video-progress'
+    | '/api/user/viper-access'
     | '/api/video-call/$id'
     | '/api/video-call/allowance'
     | '/_authed/admin/'
@@ -1531,6 +1543,7 @@ export interface RootRouteChildren {
   ApiUserReportVideoProgressRoute: typeof ApiUserReportVideoProgressRoute
   ApiUserVideoPositionRoute: typeof ApiUserVideoPositionRoute
   ApiUserVideoProgressRoute: typeof ApiUserVideoProgressRoute
+  ApiUserViperAccessRoute: typeof ApiUserViperAccessRoute
   ApiAdminDisciplineModulesModuleIdRoute: typeof ApiAdminDisciplineModulesModuleIdRoute
   ApiAdminLessonMaterialParseRoute: typeof ApiAdminLessonMaterialParseRoute
   ApiAdminLessonsLessonIdRoute: typeof ApiAdminLessonsLessonIdRouteWithChildren
@@ -1881,6 +1894,13 @@ declare module '@tanstack/react-router' {
       path: '/api/user/video-progress'
       fullPath: '/api/user/video-progress'
       preLoaderRoute: typeof ApiUserVideoProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/user/viper-access': {
+      id: '/api/user/viper-access'
+      path: '/api/user/viper-access'
+      fullPath: '/api/user/viper-access'
+      preLoaderRoute: typeof ApiUserViperAccessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/video-call/$id': {
@@ -2856,6 +2876,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiUserReportVideoProgressRoute: ApiUserReportVideoProgressRoute,
   ApiUserVideoPositionRoute: ApiUserVideoPositionRoute,
   ApiUserVideoProgressRoute: ApiUserVideoProgressRoute,
+  ApiUserViperAccessRoute: ApiUserViperAccessRoute,
   ApiAdminDisciplineModulesModuleIdRoute:
     ApiAdminDisciplineModulesModuleIdRoute,
   ApiAdminLessonMaterialParseRoute: ApiAdminLessonMaterialParseRoute,

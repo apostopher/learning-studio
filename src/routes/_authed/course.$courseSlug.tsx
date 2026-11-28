@@ -10,6 +10,7 @@ import { chatWidgetModeAtom, chatWidgetOpenAtom } from '#/atoms/chat-widget';
 import { outOfTierNoticeAtom } from '#/atoms/out-of-tier-notice';
 import { subscribedSlugsQueryOptions } from '#/data-hooks/course-access-queries';
 import { useOnboardingStatus } from '#/data-hooks/use-onboarding-status';
+import { useViperAccess } from '#/data-hooks/use-viper-access';
 import { shouldAutoOpenOnboarding } from '#/lib/onboarding-auto-open';
 import { AppShell } from '../../components/app-shell';
 import { AppShellFooter } from '../../components/app-shell-footer';
@@ -82,6 +83,7 @@ function useAutoOpenOnboarding(courseSlug: string) {
   const setOpen = useSetAtom(chatWidgetOpenAtom);
   const isWidgetOpen = useAtomValue(chatWidgetOpenAtom);
   const widgetMode = useAtomValue(chatWidgetModeAtom);
+  const viperAccess = useViperAccess(true);
 
   // Whether this visit has already made its auto-open decision (acted or
   // correctly declined to). Reset on courseSlug change because this layout is
@@ -101,8 +103,12 @@ function useAutoOpenOnboarding(courseSlug: string) {
     // means `query.data` reflects this visit, never a leftover cached value
     // from before the learner declined/deleted/paused elsewhere.
     if (query.isFetching || !query.isFetched) return;
+    // Viper is a paid feature: wait for the answer, and never open the
+    // interview for a free student.
+    if (!viperAccess.isFetched) return;
 
     hasCheckedRef.current = true;
+    if (viperAccess.data !== true) return;
 
     // A query error (isFetched still becomes true, data stays undefined) is
     // deliberately treated as "don't auto-open" — fail closed rather than
@@ -121,6 +127,8 @@ function useAutoOpenOnboarding(courseSlug: string) {
     query.isFetching,
     query.isFetched,
     query.data,
+    viperAccess.isFetched,
+    viperAccess.data,
     isWidgetOpen,
     widgetMode,
     courseSlug,

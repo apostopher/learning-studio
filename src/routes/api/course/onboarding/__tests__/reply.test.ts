@@ -6,6 +6,13 @@ const { getSession, advanceOnboarding } = vi.hoisted(() => ({
   advanceOnboarding: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
+// Viper is a paid feature: allowed unless a test says otherwise.
+const viper = vi.hoisted(() => ({ hasViperAccess: vi.fn() }));
+vi.mock('#/db/viper-access', () => ({
+  hasViperAccess: viper.hasViperAccess,
+  viperRefusal: () =>
+    Response.json({ code: 'VIPER_NOT_IN_PLAN' }, { status: 403 }),
+}));
 vi.mock('#/lib/onboarding-session.server', () => ({ advanceOnboarding }));
 
 import { replyOnboardingHandler } from '../reply';
@@ -31,6 +38,7 @@ const post = (payload: unknown) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  viper.hasViperAccess.mockResolvedValue(true);
   getSession.mockResolvedValue({ user: { id: 'user-1' } });
   advanceOnboarding.mockResolvedValue({ ok: true, body });
 });

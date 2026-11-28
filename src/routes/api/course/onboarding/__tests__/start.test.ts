@@ -6,6 +6,13 @@ const { getSession, advanceOnboarding } = vi.hoisted(() => ({
   advanceOnboarding: vi.fn(),
 }));
 vi.mock('#/lib/auth', () => ({ auth: { api: { getSession } } }));
+// Viper is a paid feature: allowed unless a test says otherwise.
+const viper = vi.hoisted(() => ({ hasViperAccess: vi.fn() }));
+vi.mock('#/db/viper-access', () => ({
+  hasViperAccess: viper.hasViperAccess,
+  viperRefusal: () =>
+    Response.json({ code: 'VIPER_NOT_IN_PLAN' }, { status: 403 }),
+}));
 vi.mock('#/lib/onboarding-session.server', () => ({ advanceOnboarding }));
 
 import { startOnboardingHandler } from '../start';
@@ -31,6 +38,7 @@ const post = (payload: unknown) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  viper.hasViperAccess.mockResolvedValue(true);
   getSession.mockResolvedValue({ user: { id: 'user-1' } });
   advanceOnboarding.mockResolvedValue({ ok: true, body });
 });
@@ -104,5 +112,14 @@ describe('startOnboardingHandler', () => {
     advanceOnboarding.mockRejectedValueOnce(new Error('model down'));
     const res = await startOnboardingHandler(post({ courseSlug: 'ppl' }));
     expect(res.status).toBe(500);
+  });
+});
+
+describe('startOnboardingHandler for a free student', () => {
+  it('403s without starting the interview', async () => {
+    viper.hasViperAccess.mockResolvedValueOnce(false);
+    const res = await startOnboardingHandler(post({ courseSlug: 'ppl' }));
+    expect(res.status).toBe(403);
+    expect(advanceOnboarding).not.toHaveBeenCalled();
   });
 });
