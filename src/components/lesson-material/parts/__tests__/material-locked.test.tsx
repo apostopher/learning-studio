@@ -58,3 +58,17 @@ describe('MaterialLocked', () => {
     expect(screen.getByRole('status').textContent).toContain('Wakeup Call');
   });
 });
+
+describe('MaterialLocked on a plan lock with no material', () => {
+  it('says the material is part of the paid plan', () => {
+    render(
+      <MaterialLocked
+        lock={{ locked: true, reason: 'plan', tabs: null }}
+        courseSlug="c"
+      />,
+    );
+    const status = screen.getByRole('status').textContent;
+    expect(status).toContain('Material locked');
+    expect(status).toContain('paid plan');
+  });
+});

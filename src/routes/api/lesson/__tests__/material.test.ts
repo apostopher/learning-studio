@@ -381,3 +381,49 @@ describe('settling progress after a material visit', () => {
     expect((await res.json()).material).toEqual(material);
   });
 });
+
+/**
+ * A paid lesson on a free seat: the learner is told which tabs exist, so the
+ * strip can show each one locked, and is sent nothing that is in them.
+ */
+describe('getLessonMaterialHandler on a plan lock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      materialLock: { kind: 'plan-locked' },
+      videoPreviewSeconds: 15,
+    });
+    getCourseLessonMaterial.mockResolvedValue({
+      ...material,
+      quiz: [{ id: 'q1' }],
+      extraTab: 'jobOfTheDay',
+    });
+  });
+
+  it('sends the tab list and none of the content', async () => {
+    const res = await getLessonMaterialHandler(req());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({
+      locked: true,
+      reason: 'plan',
+      tabs: { hasQuiz: true, hasBodyText: true, extraTab: 'jobOfTheDay' },
+    });
+    expect(JSON.stringify(body)).not.toContain('body"');
+    expect(body).not.toHaveProperty('material');
+  });
+
+  it('records no visit: a locked lesson was not read', async () => {
+    await getLessonMaterialHandler(req());
+    expect(recordLessonVisit).not.toHaveBeenCalled();
+    expect(settleProgress).not.toHaveBeenCalled();
+  });
+
+  it('sends null tabs for a lesson with no material row', async () => {
+    getCourseLessonMaterial.mockResolvedValue(null);
+    const body = await (await getLessonMaterialHandler(req())).json();
+    expect(body).toEqual({ locked: true, reason: 'plan', tabs: null });
+  });
+});

@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react';
 import type { LockedMaterialResponse } from '#/lib/lesson-gating';
 import { lessonLockSentence } from '#/lib/lock-copy';
+import { PlanLockedNotice } from './plan-locked-notice';
 
 type MaterialLockedProps = {
   lock: LockedMaterialResponse;
@@ -17,6 +18,8 @@ type MaterialLockedProps = {
  * to prevent.
  */
 export const MaterialLocked = ({ lock, courseSlug }: MaterialLockedProps) => {
+  // A paid lesson on a free seat with no material row: one panel, saying why.
+  if (lock.reason === 'plan') return <PlanLockedNotice subject="Material" />;
   const body =
     lock.reason === 'video' ? (
       <p className="text-sm text-secondary">

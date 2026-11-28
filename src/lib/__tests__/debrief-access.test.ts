@@ -197,3 +197,14 @@ describe('getDebriefAccess state', () => {
     expect(access.ok && access.state).toEqual({ kind: 'not-done' });
   });
 });
+
+describe('getDebriefAccess on a free seat', () => {
+  it('403s a paid lesson: the debrief is part of the paid plan', async () => {
+    m.evaluateLessonGate.mockResolvedValue({
+      ...openGate,
+      materialLock: { kind: 'plan-locked' },
+    });
+    expect(await getDebriefAccess(args)).toEqual({ ok: false, status: 403 });
+    expect(m.getDebriefFacts).not.toHaveBeenCalled();
+  });
+});

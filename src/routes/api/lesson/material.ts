@@ -125,6 +125,22 @@ export async function getLessonMaterialHandler(
       gate.lessonLock,
       gate.materialLock,
     );
+    if (locked?.reason === 'plan') {
+      // Which tabs the lesson has, and nothing of what is in them: the
+      // learner sees the whole strip, each tab locked.
+      const material = await getCourseLessonMaterial(lessonSlug, gate.courseId);
+      const planLocked: MaterialPayload = {
+        ...locked,
+        tabs: material
+          ? {
+              hasQuiz: (material.quiz?.length ?? 0) > 0,
+              hasBodyText: Boolean(material.text),
+              extraTab: material.extraTab,
+            }
+          : null,
+      };
+      return Response.json(planLocked);
+    }
     if (locked) return Response.json(locked);
 
     // Record the visit HERE — past the gate, before the material lookup.

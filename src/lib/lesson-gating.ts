@@ -16,6 +16,7 @@
  */
 
 import type { OutstandingItem } from '#/lib/course-progress-agg';
+import type { MaterialExtraTab } from '#/lib/flagship-course';
 
 /**
  * A learner's progress as the gate reads it, keyed by lesson slug.
@@ -98,10 +99,31 @@ export type LessonLock =
       outstanding: readonly OutstandingItem[];
     };
 
-export type MaterialLock = { kind: 'open' } | { kind: 'video-locked' };
+/**
+ * `plan-locked`: a free seat on a paid lesson (user, 2026-11-28). Only the
+ * opening of the video plays, and every tab is held back for the paid plan;
+ * watching cannot open it, so it is not a `video-locked`.
+ */
+export type MaterialLock =
+  | { kind: 'open' }
+  | { kind: 'video-locked' }
+  | { kind: 'plan-locked' };
+
+/**
+ * Which tabs a plan-locked lesson has, so the learner sees the whole strip,
+ * each tab saying it is locked, without any of the content behind it.
+ */
+export type PlanLockedTabs = {
+  hasQuiz: boolean;
+  /** The material has body text (one of the two sources a debrief needs). */
+  hasBodyText: boolean;
+  extraTab: MaterialExtraTab;
+};
 
 export type LockedMaterialResponse =
   | { locked: true; reason: 'video' }
+  /** `tabs` is null when the lesson has no material row at all. */
+  | { locked: true; reason: 'plan'; tabs: PlanLockedTabs | null }
   | {
       locked: true;
       reason: 'lesson';
@@ -489,6 +511,11 @@ export function lockedResponse(
   }
   if (materialLock.kind === 'video-locked') {
     return { locked: true, reason: 'video' };
+  }
+  if (materialLock.kind === 'plan-locked') {
+    // The tabs need the material row, which this never reads; the material
+    // route fills them in.
+    return { locked: true, reason: 'plan', tabs: null };
   }
   return null;
 }

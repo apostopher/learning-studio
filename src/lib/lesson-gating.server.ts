@@ -232,13 +232,14 @@ export async function evaluateLessonGate({
     level,
     outOfTier: null,
     lessonLock: evaluateLessonLock(gateCourse, lessonSlug, learnerProgress),
-    // A preview can never be watched to the end, so a "watch the video
-    // first" lock would hold the brief, quiz and debrief shut for good. Only
-    // the video is capped on a free seat (user, 2026-11-28).
+    // A free seat on a paid lesson: every tab is held back for the paid plan
+    // (user, 2026-11-28), not merely until the video is watched — a preview
+    // cannot be watched through. Every consumer that requires `open` (quiz
+    // answers, section taps) refuses it as it would any lock.
     materialLock:
       preview === null
         ? evaluateMaterialLock(gateCourse, lessonSlug, learnerProgress)
-        : { kind: 'open' },
+        : { kind: 'plan-locked' },
     videoPreviewSeconds: preview,
   };
 }

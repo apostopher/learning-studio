@@ -52,7 +52,9 @@ export async function getDebriefAccess({
     !gate ||
     !gate.subscribed ||
     gate.outOfTier ||
-    gate.lessonLock.kind !== 'open'
+    gate.lessonLock.kind !== 'open' ||
+    // A free seat on a paid lesson: the debrief is part of the paid plan.
+    gate.materialLock.kind === 'plan-locked'
   ) {
     return { ok: false, status: 403 };
   }

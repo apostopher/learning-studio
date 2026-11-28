@@ -23,6 +23,7 @@ import { AdminPreviewNote } from './parts/admin-preview-note';
 import { DebriefPanelContainer } from './parts/debrief-panel-container';
 import { LessonDebriefSection } from './parts/lesson-debrief-section';
 import { MaterialLocked } from './parts/material-locked';
+import { PlanLockedMaterial } from './plan-locked-material';
 
 type LessonMaterialWrapperProps = {
   lessonSlug: string;
@@ -132,6 +133,16 @@ export const LessonMaterialWrapper = ({
         </LessonDebriefSection>
       ) : null;
     case 'locked':
+      // A paid lesson on a free seat: the whole tab strip, each tab locked.
+      if (state.lock.reason === 'plan' && state.lock.tabs) {
+        return (
+          <PlanLockedMaterial
+            tabs={state.lock.tabs}
+            courseSlug={courseSlug}
+            transcriptUsable={transcriptUsable}
+          />
+        );
+      }
       return <MaterialLocked lock={state.lock} courseSlug={courseSlug} />;
     case 'ready':
       return (

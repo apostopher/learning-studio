@@ -84,10 +84,28 @@ describe('a free seat on a paid lesson', () => {
     expect(m.seatPlanForCourse).toHaveBeenCalledWith('u1', 7);
   });
 
-  it('opens the material it could never unlock by watching', async () => {
+  it('holds the material back for the paid plan, not until a watch', async () => {
     const result = await gate('paid');
-    expect(result?.materialLock).toEqual({ kind: 'open' });
+    expect(result?.materialLock).toEqual({ kind: 'plan-locked' });
+    // The lesson itself still opens: its 15-second preview plays.
     expect(result?.lessonLock).toEqual({ kind: 'open' });
+  });
+
+  it('holds it back even once the video was watched (on an earlier paid seat)', async () => {
+    m.getCourseProgress.mockResolvedValue({
+      lessons: [
+        {
+          lessonId: 10,
+          moduleId: 1,
+          percent: 100,
+          watched: true,
+          done: true,
+          outstanding: [],
+        },
+      ],
+    });
+    const result = await gate('paid');
+    expect(result?.materialLock).toEqual({ kind: 'plan-locked' });
   });
 });
 
